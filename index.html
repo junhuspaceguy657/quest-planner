@@ -66,7 +66,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v12</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v13</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -449,7 +449,18 @@ function vHealth(){
     <span class="m">${w?'이번 주 체크선 '+w.line+'kg':''}</span></div>
     <div class="m" style="margin-top:6px">7일 평균 ${av==null?'-':av.toFixed(1)+'kg'} ${hint?'· '+hint:''}</div>
     ${safe(()=>hChart(p))}</div>
-  <details class="card"><summary>📘 다이어트 수칙 · 보정 규칙</summary><div class="m" style="white-space:pre-line;margin-top:6px">${esc(p.guide)}</div></details>`;
+  <details class="card"><summary>📘 다이어트 수칙 · 보정 규칙</summary><div class="m" style="white-space:pre-line;margin-top:6px">${esc(p.guide)}</div></details>
+  <details class="card"><summary>⚖️ 과거 체중 불러오기</summary>
+    <p class="m">문서\\퀘스트로드맵\\data\\weights.json 파일을 고르면 과거 체중이 들어와요. 이미 적은 날짜는 덮어쓰지 않아요. (현재 ${Object.keys(S.health).filter(d=>parseFloat(S.health[d].weight)>0).length}일치 기록됨)</p>
+    <button onclick="$('#wf').click()">weights.json 선택</button><input type="file" id="wf" accept=".json,application/json" hidden onchange="wImport(this.files[0])"></details>`;
+}
+async function wImport(f){
+  if(!f)return;
+  try{
+    const w=JSON.parse(await f.text());let n=0;
+    for(const d in w){if(!/^\d{4}-\d\d-\d\d$/.test(d)||!(parseFloat(w[d])>0))continue;const h=S.health[d]=S.health[d]||{};if(!(parseFloat(h.weight)>0)){h.weight=w[d];n++}}
+    save();alert(n+'일치 체중을 넣었어요');render();
+  }catch(e){alert('올바른 체중 파일이 아니에요')}
 }
 function pTick(date,id){const l=S.log[date]=S.log[date]||{};l[id]=!l[id];save();render()}
 function pDel(id){if(confirm('이 로드맵을 삭제할까요? (체크 기록은 남아요)')){S.plans=S.plans.filter(x=>x.id!=id);save();render()}}
