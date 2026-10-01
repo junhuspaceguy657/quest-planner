@@ -70,7 +70,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v14</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v15</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -505,9 +505,9 @@ function rExport(){
 let tok=null,events=S.evCache||null;
 const gready=()=>window.google&&google.accounts&&google.accounts.oauth2;
 function loadGIS(){return new Promise((ok,no)=>{if(gready())return ok();const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.onload=ok;s.onerror=()=>no(new Error('Google 스크립트를 불러오지 못했어요'));document.head.appendChild(s)})}
-async function login(silent){
-  if(!S.clientId)throw new Error('먼저 Client ID를 저장해 주세요');
-  await loadGIS();
+function login(silent){   // async/await를 쓰지 않아요: 버튼을 누른 즉시 같은 흐름에서 팝업을 열어야 아이폰 Safari가 막지 않아요
+  if(!S.clientId)return Promise.reject(new Error('먼저 Client ID를 저장해 주세요'));
+  if(!gready())return loadGIS().then(()=>login(silent));
   return new Promise((ok,no)=>{
     if(silent)setTimeout(()=>no(new Error('timeout')),8000);   // 팝업이 막히면 포기하고 버튼으로 로그인
     const c=google.accounts.oauth2.initTokenClient({client_id:S.clientId,scope:'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata',
@@ -576,6 +576,7 @@ async function syncNow(interactive){
   }finally{busy=false}
 }
 function initSync(){
+  loadGIS().catch(()=>{});   // 구글 로그인 스크립트를 미리 받아 둠 (버튼을 눌렀을 때 바로 팝업을 열기 위해)
   if(!S.syncOn){setSync('동기화');return}
   setSync('연결 중…');
   login(true).then(()=>syncNow(false)).catch(()=>setSync('로그인 필요 (눌러서 동기화)'));
