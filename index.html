@@ -7,6 +7,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="퀘스트">
 <meta name="theme-color" content="#1f2a44">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <title>퀘스트 플래너</title>
 <style>
 :root{color-scheme:light;--bg:#f4f5f9;--card:#fff;--tx:#1b1f2a;--mu:#6b7385;--ln:#e3e6ee;--ac:#3b5bdb;--ok:#2f9e44;--main:#e8590c;--sub:#1c7ed6}
@@ -66,7 +70,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v13</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v14</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -628,6 +632,7 @@ function bk(){const a=document.createElement('a');a.href=URL.createObjectURL(new
 function rs(f){if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.daily)throw 0;if(confirm('현재 데이터를 덮어쓸까요?')){S=d;S.plans=S.plans||[];S.planCfg=S.planCfg||{};S.health=S.health||{};S.clientId=S.clientId||DEFAULT_CLIENT;save();render()}}catch(e){alert('올바른 백업 파일이 아니에요')}})}
 
 render();initSync();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});   // 홈 화면 앱으로 설치·오프라인 열기용
 </script>
 </body>
 </html>
