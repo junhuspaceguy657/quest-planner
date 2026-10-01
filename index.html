@@ -70,7 +70,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v15</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v16</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -577,6 +577,8 @@ async function syncNow(interactive){
 }
 function initSync(){
   loadGIS().catch(()=>{});   // 구글 로그인 스크립트를 미리 받아 둠 (버튼을 눌렀을 때 바로 팝업을 열기 위해)
+  // 앱을 연 뒤 처음 화면을 누를 때 조용히 다시 로그인 → 동기화 (로그인은 1시간만 유지되고 브라우저는 몰래 연장할 수 없어서)
+  document.addEventListener('pointerdown',()=>{if(S.syncOn&&!tok&&!busy)login(true).then(()=>syncNow(false)).catch(()=>{})},{passive:true});
   if(!S.syncOn){setSync('동기화');return}
   setSync('연결 중…');
   login(true).then(()=>syncNow(false)).catch(()=>setSync('로그인 필요 (눌러서 동기화)'));
