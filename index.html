@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="퀘스트">
+<meta name="theme-color" content="#1f2a44">
+<title>퀘스트 플래너</title>
+<style>
+:root{color-scheme:light;--bg:#f4f5f9;--card:#fff;--tx:#1b1f2a;--mu:#6b7385;--ln:#e3e6ee;--ac:#3b5bdb;--ok:#2f9e44;--main:#e8590c;--sub:#1c7ed6}
+@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#12151d;--card:#1b2030;--tx:#e8eaf2;--mu:#98a0b5;--ln:#2a3147;--ac:#748ffc;--ok:#51cf66;--main:#ff922b;--sub:#4dabf7}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+header{padding:calc(14px + env(safe-area-inset-top)) 16px 6px;display:flex;justify-content:space-between;align-items:baseline}
+h1{font-size:20px;margin:0}
+#date{color:var(--mu);font-size:14px}
+main{max-width:720px;margin:0 auto;padding:0 12px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:12px 14px;margin:10px 0}
+.row{display:flex;align-items:center;gap:10px}
+.row+.row{margin-top:8px}
+.grow{flex:1;min-width:0}
+.item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--ln)}
+.item:last-child{border:0}
+.item input[type=checkbox]{width:22px;height:22px;margin-top:2px;accent-color:var(--ok)}
+.done .t{text-decoration:line-through;color:var(--mu)}
+.t{word-break:break-word}
+.m{font-size:13px;color:var(--mu)}
+.tag{font-size:12px;padding:1px 7px;border-radius:99px;border:1px solid var(--ln);color:var(--mu)}
+.late{color:#e03131;border-color:#e03131}
+button,input,select,textarea{font:inherit;color:inherit}
+input[type=text],input[type=date],input[type=number],input[type=password],select,textarea{color:var(--tx);width:100%;padding:9px 10px;border:1px solid var(--ln);border-radius:10px;background:var(--bg)}
+textarea{min-height:120px}
+button{border:1px solid var(--ln);background:var(--card);border-radius:10px;padding:8px 12px;cursor:pointer}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+button.i{padding:4px 8px;font-size:13px;color:var(--mu)}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days label{border:1px solid var(--ln);border-radius:8px;padding:5px 9px;font-size:14px;cursor:pointer;user-select:none}
+.days input{display:none}
+.days input:checked+span{color:var(--ac);font-weight:700}
+.days label:has(input:checked){border-color:var(--ac)}
+.bar{height:8px;background:var(--ln);border-radius:9px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--ok)}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--ln);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;border-radius:0;background:none;padding:10px 2px;font-size:12px;color:var(--mu)}
+nav button b{display:block;font-size:20px;font-weight:400}
+nav button.on{color:var(--ac);font-weight:700}
+h2{font-size:16px;margin:16px 4px 4px}
+h3{font-size:14px;margin:12px 0 2px;color:var(--mu)}
+.empty{color:var(--mu);text-align:center;padding:18px 0}
+.ev{padding:8px 0;border-bottom:1px solid var(--ln)}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v11</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<main id="app"></main>
+<nav id="nav"></nav>
+
+<script>
+const DAYS=['일','월','화','수','목','금','토'], RR=['SU','MO','TU','WE','TH','FR','SA'];
+const KEY='questPlanner.v1';
+const $=s=>document.querySelector(s);
+const uid=()=>Math.random().toString(36).slice(2,10);
+const ymd=d=>{d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+const DEFAULT_CLIENT='161353044507-1865v8jg4cqhb2g1h6fac00kr2kq1ho2.apps.googleusercontent.com';  // 공개돼도 되는 값 (비밀번호 아님)
+S=S||{daily:[],log:{},main:[],sub:[],roadmap:[],clientId:''};
+S.plans=S.plans||[];S.planCfg=S.planCfg||{};S.health=S.health||{};S.clientId=S.clientId||DEFAULT_CLIENT;
+const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const save=()=>{S.dirty=true;persist();schedPush()};   // 바뀔 때마다 저장 + (로그인돼 있으면) 드라이브로 자동 동기화
+/*B*/const BUNDLED=[];/*E*/
+BUNDLED.forEach(p=>{const i=S.plans.findIndex(x=>x.id==p.id);if(i<0)S.plans.push(p);else S.plans[i]=p});persist();  // 내장 로드맵은 항상 최신본으로 (시작일 설정은 유지)
+/*W*/const BUNDLED_W={};/*WE*/
+if(S.wSeed!='v1'){   // 과거 체중(SmartDiet CSV + 스크린샷)을 한 번만 채워 넣음. 이미 적어 둔 날짜는 건드리지 않아요
+  for(const d in BUNDLED_W){const h=S.health[d]=S.health[d]||{};if(!(parseFloat(h.weight)>0))h.weight=BUNDLED_W[d]}
+  S.wSeed='v1';persist();
+}
+const tTxt=t=>typeof t=='string'?t:t.t, tNote=t=>typeof t=='string'?'':(t.n||'');
+
+/* ---------- 주차 로드맵 → 일일 퀘스트 자동 배치 ---------- */
+const dt=s=>new Date(s+'T00:00');
+const mondayOf=s=>{const d=dt(s);d.setDate(d.getDate()-((d.getDay()+6)%7));return d};
+const cfg=p=>S.planCfg[p.id]||(S.planCfg[p.id]={});
+const pStart=p=>cfg(p).start||p.startDate;
+const pOn=p=>cfg(p).on!==false;
+const weekNo=(p,date)=>Math.round((mondayOf(date)-mondayOf(pStart(p)))/6048e5)+1;  // 시작일이 속한 주 = 1주차
+const dayDate=(p,n,dow)=>{const d=mondayOf(pStart(p));d.setDate(d.getDate()+7*(n-1)+(dow==0?6:dow-1));return ymd(d)};
+function planTasks(date){
+  const dow=dt(date).getDay(),out=[];
+  S.plans.filter(p=>pOn(p)&&!p.kind).forEach(p=>{   // 건강(kind) 로드맵은 오늘의 학습이 아니라 건강 탭에서
+    const n=weekNo(p,date),w=p.weeks.find(x=>x.n==n);
+    if(w)(w.days[dow]||[]).forEach((t,i)=>out.push({id:p.id+'|'+n+'|'+dow+'|'+i,text:tTxt(t),note:tNote(t),plan:p,n,wt:w.title}));
+  });
+  return out;
+}
+const isDone=(date,id)=>!!(S.log[date]||{})[id];
+
+let tab='today', viewDate=ymd(), msg='';
+const TABS=[['today','📅','오늘'],['quest','🔥','퀘스트'],['health','🥗','건강'],['road','🗺️','로드맵'],['cal','🗓️','캘린더']];
+
+function render(){
+  $('#date').textContent=new Date().toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'});
+  $('#nav').innerHTML=TABS.map(([k,i,n])=>`<button class="${k==tab?'on':''}" onclick="go('${k}')"><b>${i}</b>${n}</button>`).join('');
+  $('#app').innerHTML=({today:vToday,quest:vQuests,health:()=>safe(vHealth),road:vRoad,cal:vCal})[tab]();
+}
+const go=k=>{tab=k;msg='';render();scrollTo(0,0)};
+
+/* ---------- 일일 퀘스트 ---------- */
+function vToday(){
+  const dow=new Date(viewDate+'T00:00').getDay();
+  const list=S.daily.filter(q=>q.days.includes(dow));
+  const log=S.log[viewDate]||{};
+  const pt=planTasks(viewDate);
+  const n=list.filter(q=>log[q.id]).length+pt.filter(t=>log[t.id]).length, tot=list.length+pt.length;
+  return `
+  <div class="card"><div class="row">
+    <button class="i" onclick="shift(-1)">◀</button>
+    <div class="grow" style="text-align:center"><b>${viewDate} (${DAYS[dow]})</b>${viewDate==ymd()?' · 오늘':''}</div>
+    <button class="i" onclick="shift(1)">▶</button></div>
+    <div class="bar" style="margin-top:10px"><i style="width:${tot?n/tot*100:0}%"></i></div>
+    <div class="m" style="margin-top:4px">${n} / ${tot} 완료</div></div>
+  ${safe(()=>openQuests('main','🔥 메인 퀘스트'))}
+  ${safe(()=>openQuests('sub','📌 서브 퀘스트'))}
+  ${safe(weekEvents)}
+  ${pt.length?`<h2>📖 오늘의 학습 (주차별 자동)</h2><div class="card">${pt.map(t=>`
+    <div class="item ${log[t.id]?'done':''}"><input type="checkbox" ${log[t.id]?'checked':''} onchange="tick('${t.id}')">
+    <div class="grow"><div class="t">${esc(t.text)}</div>${t.note?`<div class="m" style="white-space:pre-line;margin-top:2px">${esc(t.note)}</div>`:''}<div class="m"><span class="tag">${esc(t.plan.name)} · ${t.n}주차</span> ${esc(t.wt)}</div></div></div>`).join('')}</div>`:''}
+  <h2>✅ 내 일일 퀘스트</h2>
+  <div class="card">${list.length?list.map(q=>`
+    <div class="item ${log[q.id]?'done':''}"><input type="checkbox" ${log[q.id]?'checked':''} onchange="tick('${q.id}')">
+    <div class="grow"><div class="t">${esc(q.title)}</div>${q.memo?`<div class="m">${esc(q.memo)}</div>`:''}</div></div>`).join(''):'<div class="empty">이 날 해당하는 일일 퀘스트가 없어요</div>'}</div>
+  <h2>일일 퀘스트 관리</h2>
+  <div class="card">
+    <input type="text" id="dt" placeholder="예: Voca 복습 / Grammar & Reading 1유닛">
+    <div class="days" style="margin:8px 0" id="dd">${DAYS.map((d,i)=>`<label><input type="checkbox" value="${i}" checked><span>${d}</span></label>`).join('')}</div>
+    <input type="text" id="dm" placeholder="메모 (선택)" style="margin-bottom:8px">
+    <button class="p" onclick="addDaily()">+ 일일 퀘스트 추가</button></div>
+  ${S.daily.map(q=>`<div class="card"><div class="row"><div class="grow"><b>${esc(q.title)}</b>
+    <div class="m">${q.days.length==7?'매일':q.days.map(d=>DAYS[d]).join(' ')}${q.memo?' · '+esc(q.memo):''}</div></div>
+    <button class="i" onclick="editDaily('${q.id}')">수정</button>
+    <button class="i" onclick="calDaily('${q.id}')">📆</button>
+    <button class="i" onclick="delDaily('${q.id}')">삭제</button></div></div>`).join('')}
+  ${S.plans.filter(p=>p.guide&&pOn(p)&&!p.kind).map(p=>`<details class="card"><summary>📘 학습 방법 · ${esc(p.name)}</summary><div class="m" style="white-space:pre-line;margin-top:6px">${esc(p.guide)}</div></details>`).join('')}`;
+}
+const safe=f=>{try{return f()}catch(e){return `<div class="card m">표시 오류: ${esc(e.message)}</div>`}};
+function openQuests(k,title){
+  const today=ymd(),L=S[k].filter(q=>!q.done).sort((a,b)=>(a.due||'9')>(b.due||'9')?1:-1);
+  return `<h2>${title} <span class="tag">${L.length}</span></h2><div class="card">${L.length?L.map(q=>`<div class="item">${qMain(k,q,today)}</div>`).join(''):'<div class="empty">진행 중인 퀘스트가 없어요 (메인/서브 탭에서 추가)</div>'}</div>`;
+}
+function evDate(e){return e.start.date||ymd(new Date(e.start.dateTime))}
+function evRow(e,withDate){
+  const t=e.start.dateTime?new Date(e.start.dateTime).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}):'종일';
+  const d=evDate(e);
+  return `<div class="ev"><div class="m">${withDate?md(d)+' ('+DAYS[dt(d).getDay()]+') · ':''}${t}</div>${esc(e.summary||'(제목 없음)')}</div>`;
+}
+function weekEvents(){
+  const mon=mondayOf(ymd()),a=ymd(mon);mon.setDate(mon.getDate()+6);const b=ymd(mon);
+  let body;
+  if(!events)body=`<div class="empty">아직 불러오지 않았어요 <button onclick="loadEvents()">일정 불러오기</button></div>`;
+  else{const L=events.filter(e=>evDate(e)>=a&&evDate(e)<=b);
+    body=L.length?L.map(e=>evRow(e,true)).join(''):'<div class="empty">이번 주 일정이 없어요</div>'}
+  return `<h2>🗓️ 이번 주 일정 <span class="tag">${md(a)}–${md(b)}</span></h2><div class="card">${body}${events&&S.evAt?`<div class="m" style="margin-top:6px">${new Date(S.evAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} 기준 <button class="i" onclick="loadEvents()">새로고침</button></div>`:''}</div>`;
+}
+function shift(n){const d=new Date(viewDate+'T00:00');d.setDate(d.getDate()+n);viewDate=ymd(d);render()}
+function tick(id){const l=S.log[viewDate]=S.log[viewDate]||{};l[id]=!l[id];save();render()}
+function addDaily(){
+  const t=$('#dt').value.trim();if(!t)return;
+  const days=[...document.querySelectorAll('#dd input:checked')].map(x=>+x.value);
+  if(!days.length)return alert('요일을 하나 이상 골라주세요');
+  S.daily.push({id:uid(),title:t,days,memo:$('#dm').value.trim()});save();render();
+}
+function editDaily(id){
+  const q=S.daily.find(x=>x.id==id);
+  const t=prompt('이름',q.title);if(t===null)return;
+  const d=prompt('요일 (0=일 … 6=토, 쉼표로 구분. 예: 1,3,5)',q.days.join(','));if(d===null)return;
+  const days=d.split(',').map(x=>+x.trim()).filter(x=>x>=0&&x<=6);
+  q.title=t.trim()||q.title;if(days.length)q.days=days;
+  const m=prompt('메모',q.memo||'');if(m!==null)q.memo=m;save();render();
+}
+function delDaily(id){if(confirm('삭제할까요?')){S.daily=S.daily.filter(x=>x.id!=id);save();render()}}
+
+/* ---------- 메인 / 서브 퀘스트 ---------- */
+let addKind='main';
+function qList(kind,title){
+  const L=S[kind],name=kind=='main'?'메인':'서브',today=ymd();
+  const open=L.filter(q=>!q.done).sort((a,b)=>(a.due||'9')>(b.due||'9')?1:-1), done=L.filter(q=>q.done);
+  const row=q=>`<div class="item ${q.done?'done':''}">${qMain(kind,q,today)}
+    ${(q.goal||1)>1&&(q.cnt||0)>0?`<button class="i" onclick="qInc('${kind}','${q.id}',-1)">−1</button>`:''}
+    <button class="i" onclick="qEdit('${kind}','${q.id}')">수정</button>
+    ${q.due&&!q.gid?`<button class="i" onclick="calQuest('${kind}','${q.id}')">📆</button>`:''}
+    <button class="i" onclick="qDel('${kind}','${q.id}')">삭제</button></div>`;
+  return `<h2>${title} <span class="tag">${open.length}</span></h2>
+  <div class="card">${open.length?open.map(row).join(''):`<div class="empty">진행 중인 ${name} 퀘스트가 없어요</div>`}</div>
+  ${done.length?`<details class="card"><summary>${name} 완료 ${done.length}개</summary>${done.map(row).join('')}</details>`:''}`;
+}
+function vQuests(){   // 메인·서브 통합 화면
+  const today=ymd();
+  return `
+  <div class="card"><div class="row" style="margin-bottom:8px"><label class="m">종류</label>
+    <select id="qk" style="flex:1" onchange="addKind=this.value"><option value="main" ${addKind=='main'?'selected':''}>🔥 메인 퀘스트 (중요)</option><option value="sub" ${addKind=='sub'?'selected':''}>📌 서브 퀘스트</option></select></div>
+    <input type="text" id="qt" placeholder="퀘스트 이름" style="margin-bottom:8px">
+    <div class="row"><label class="m">등록일</label><input type="date" id="qc" value="${today}" style="flex:1">
+      <label class="m">마감일</label><input type="date" id="qd" style="flex:1"></div>
+    <div class="row"><label class="m">횟수</label><input type="number" id="qg" min="1" value="1" style="width:80px"><input type="text" id="qm" placeholder="메모 (횟수 1 = 한 번만 하면 완료)" class="grow"></div>
+    <button class="p" style="margin-top:8px" onclick="qAdd()">+ 퀘스트 추가</button></div>
+  ${qList('main','🔥 메인 퀘스트')}
+  ${qList('sub','📌 서브 퀘스트')}`;
+}
+function qAdd(){
+  const k=$('#qk').value;addKind=k;
+  const t=$('#qt').value.trim();if(!t)return;
+  const goal=Math.max(1,parseInt($('#qg').value)||1);
+  S[k].push({id:uid(),title:t,created:$('#qc').value||ymd(),due:$('#qd').value,memo:$('#qm').value.trim(),goal,cnt:0,done:false});save();render();
+}
+function qDone(k,id){const q=S[k].find(x=>x.id==id);q.done=!q.done;if((q.goal||1)>1)q.cnt=q.done?q.goal:Math.max(0,q.goal-1);save();render()}
+function qInc(k,id,n){const q=S[k].find(x=>x.id==id),g=q.goal||1;q.cnt=Math.max(0,Math.min(g,(q.cnt||0)+n));q.done=q.cnt>=g;save();render()}
+/* 메인/서브 한 줄 (횟수 퀘스트는 +1 버튼) */
+function qMain(k,q,today){
+  const g=q.goal||1;
+  return `${g>1?`<button class="p" style="padding:4px 10px;margin-top:-2px" ${q.done?'disabled':''} onclick="qInc('${k}','${q.id}',1)">+1</button>`
+    :`<input type="checkbox" ${q.done?'checked':''} onchange="qDone('${k}','${q.id}')">`}
+    <div class="grow"><div class="t">${esc(q.title)}${g>1?` <span class="tag">${q.cnt||0} / ${g}회</span>`:''}</div>
+    <div class="m">${q.created?`<span class="tag">등록 ${md(q.created)}</span> `:''}${q.due?`<span class="tag ${!q.done&&q.due<today?'late':''}">마감 ${md(q.due)}</span> `:''}${q.gid?'<span class="tag">📆 연동됨</span> ':''}${esc(q.memo||'')}</div></div>`;
+}
+function qDel(k,id){if(confirm('삭제할까요?')){S[k]=S[k].filter(x=>x.id!=id);save();render()}}
+function qEdit(k,id){
+  const q=S[k].find(x=>x.id==id);
+  const t=prompt('이름',q.title);if(t===null)return;
+  const d=prompt('마감일 (YYYY-MM-DD, 비우면 없음)',q.due||'');if(d===null)return;
+  const g=prompt('목표 횟수 (1 = 한 번)',q.goal||1);if(g===null)return;
+  const m=prompt('메모',q.memo||'');
+  q.title=t.trim()||q.title;q.due=d.trim();q.goal=Math.max(1,parseInt(g)||1);q.cnt=Math.min(q.cnt||0,q.goal);q.done=q.done&&q.cnt>=q.goal||(q.goal==1&&q.done);
+  if(m!==null)q.memo=m;save();render();
+}
+
+/* ---------- 로드맵 / 진도표 ---------- */
+const SAMPLE=`# Grammar & Reading
+## 1단계
+- [ ] 예시 항목 1
+- [ ] 예시 항목 2
+# Video Editor Curriculum
+## 1단계
+- [ ] 예시 항목
+# Voca Application
+## 1단계
+- [ ] 예시 항목`;
+function parseRoad(txt){
+  const out=[];let p=null,ph='';
+  txt.split(/\r?\n/).forEach(l=>{
+    let m;l=l.trim();
+    if(m=l.match(/^#\s+(.+)/)){p={id:uid(),name:m[1],items:[]};out.push(p);ph=''}
+    else if(m=l.match(/^#{2,}\s+(.+)/)){ph=m[1]}
+    else if(m=l.match(/^[-*]\s*\[( |x|X)\]\s*(.+)/)){if(!p){p={id:uid(),name:'로드맵',items:[]};out.push(p)}p.items.push({id:uid(),title:m[2],phase:ph,done:m[1]!=' '})}
+    else if(m=l.match(/^[-*]\s+(.+)/)){if(!p){p={id:uid(),name:'로드맵',items:[]};out.push(p)}p.items.push({id:uid(),title:m[1],phase:ph,done:false})}
+  });
+  return out;
+}
+const WD=['일','월','화','수','목','금','토'], ORDER=[1,2,3,4,5,6,0];
+const md=s=>s.slice(5).replace('-','/');
+function vPlans(){
+  const today=ymd();
+  return S.plans.map(p=>{
+    let tot=0,dn=0;
+    p.weeks.forEach(w=>Object.keys(w.days).forEach(d=>w.days[d].forEach((t,i)=>{tot++;if(isDone(dayDate(p,w.n,+d),p.id+'|'+w.n+'|'+d+'|'+i))dn++})));
+    if(p.kind)p.weeks.forEach(w=>ORDER.forEach(d=>{tot++;if(hDayOk(p,dayDate(p,w.n,d)))dn++}));
+    const cur=weekNo(p,today),last=Math.max(...p.weeks.map(w=>w.n)),pc=tot?Math.round(dn/tot*100):0;
+    const state=cur<0||cur<p.weeks[0].n?`시작 전 (${pStart(p)})`:cur>last?'기간 종료':`지금 ${cur}주차 / ${last}주차`;
+    const weeks=p.weeks.map(w=>{
+      const a=dayDate(p,w.n,1),b=dayDate(p,w.n,0);
+      let wt=0,wd=0;
+      if(p.kind){wt=7;ORDER.forEach(d=>{if(hDayOk(p,dayDate(p,w.n,d)))wd++});
+        const av=hAvg(dayDate(p,w.n,0),7);
+        return `<div class="row" style="margin-top:6px"><div class="grow">${w.n}주차 · ${esc(w.title)} <span class="tag">${md(a)}–${md(b)}</span>${w.n==cur?' <span class="tag late">이번 주</span>':''}</div><span class="tag">운동·걷기 ${wd}/7일</span><span class="tag">${av==null?'체중 -':'평균 '+av.toFixed(1)+'kg'}</span></div>`}
+      const body=ORDER.filter(d=>(w.days[d]||[]).length).map(d=>{const date=dayDate(p,w.n,d);
+        return `<h3>${WD[d]} ${md(date)}${date==today?' · 오늘':''}</h3>`+w.days[d].map((t,i)=>{const id=p.id+'|'+w.n+'|'+d+'|'+i,ck=isDone(date,id);wt++;if(ck)wd++;
+          return `<div class="item ${ck?'done':''}"><input type="checkbox" ${ck?'checked':''} onchange="pTick('${date}','${id}')"><div class="grow"><div class="t">${esc(tTxt(t))}</div>${tNote(t)?`<div class="m" style="white-space:pre-line">${esc(tNote(t))}</div>`:''}</div></div>`}).join('')}).join('');
+      return `<details ${w.n==cur?'open':''} style="margin-top:6px"><summary>${w.n}주차 · ${esc(w.title)} <span class="tag">${md(a)}–${md(b)}</span> <span class="tag">${wd}/${wt}</span>${w.n==cur?' <span class="tag late">이번 주</span>':''}</summary>${body}</details>`}).join('');
+    return `<div class="card"><div class="row"><div class="grow"><b>${esc(p.name)}</b><div class="m">${state}</div></div><span class="tag">${pc}%</span></div>
+      <div class="bar" style="margin:8px 0"><i style="width:${pc}%"></i></div>
+      <div class="row"><label class="m">1주차 시작일</label><input type="date" value="${pStart(p)}" style="flex:1" onchange="cfg(S.plans.find(x=>x.id=='${p.id}')).start=this.value;save();render()">
+      ${p.kind?'<span class="m">🥗 건강 탭에 표시돼요</span>':`<label class="m"><input type="checkbox" ${pOn(p)?'checked':''} onchange="cfg(S.plans.find(x=>x.id=='${p.id}')).on=this.checked;save();render()"> 오늘 탭에 표시</label>`}</div>
+      ${p.guide?`<details style="margin-top:8px"><summary>📘 학습 방법</summary><div class="m" style="white-space:pre-line;margin-top:6px">${esc(p.guide)}</div></details>`:''}
+      ${weeks}
+      <div class="row" style="margin-top:8px"><button class="i" onclick="pDel('${p.id}')">이 로드맵 삭제</button></div></div>`;
+  }).join('')+`<div class="card"><b>로드맵 파일 불러오기</b>
+    <p class="m">문서\\퀘스트로드맵\\data 폴더의 .json 파일을 고르세요 (여러 개 선택 가능). 같은 id는 갱신되고 시작일 설정은 유지돼요.</p>
+    <button onclick="$('#pf').click()">JSON 파일 선택</button>
+    <input type="file" id="pf" accept=".json,application/json" multiple hidden onchange="pImport(this.files)"></div>`;
+}
+/* ---------- 건강: 식단(매일 랜덤) · 운동 · 걷기 · 체중 ---------- */
+const HP=()=>S.plans.find(p=>p.kind=='health');
+const hHash=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0};
+const hRng=seed=>{let a=seed;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}};
+function hCombos(p){   // 칼로리·단백질 범위 안, 컵누들·참치는 하루 1번까지인 아침·점심·저녁 조합
+  const M=p.meals,L=p.limits,out=[];
+  M.b.forEach(b=>M.l.forEach(l=>M.d.forEach(d=>{
+    const k=b.kcal+l.kcal+d.kcal,pr=b.p+l.p+d.p,cup=(b.cup||0)+(l.cup||0)+(d.cup||0),tu=(b.tuna||0)+(l.tuna||0)+(d.tuna||0);
+    if(k>=L.min&&k<=L.max&&pr>=L.pro&&pr<=L.proMax&&cup<=1&&tu<=1)out.push({m:[b,l,d],k,p:pr});})));
+  return out;
+}
+function hPick(p,date,avoid){
+  let all=hCombos(p);if(!all.length)return null;
+  if(avoid){const f=all.filter(c=>c.m.every((x,i)=>x.id!=avoid.m[i].id));if(f.length)all=f}   // 전날과 같은 메뉴는 피함
+  const r=hRng(hHash(date+'|'+((S.health[date]||{}).re||0)+'|'+p.id));
+  return all[Math.floor(r()*all.length)];
+}
+const hMenu=(p,date)=>hPick(p,date,hPick(p,addDay(date,-1),null));
+const hd=date=>S.health[date]||(S.health[date]={});
+function hAvg(date,n){const v=[];for(let i=0;i<n;i++){const w=parseFloat((S.health[addDay(date,-i)]||{}).weight);if(w>0)v.push(w)}return v.length?v.reduce((a,b)=>a+b)/v.length:null}
+const hDayOk=(p,date)=>{const h=S.health[date];return !!h&&(h.sets||0)>=3&&(+h.steps||0)>=(p.goalSteps||10000)};
+function hTick(date,k){const h=hd(date);h[k]=!h[k];save();render()}
+function hSet(date,k,v){hd(date)[k]=v;save();render()}
+function hSets(date,i,on){hd(date).sets=on?i:i-1;save();render()}
+function hReroll(date){
+  const p=HP(),h=hd(date),sig=()=>{const c=hMenu(p,date);return c?c.m.map(m=>m.id).join():''},was=sig();
+  for(let i=0;i<20;i++){h.re=(h.re||0)+1;if(sig()!=was)break}   // 눌렀는데 같은 메뉴가 나오지 않게
+  save();render();
+}
+/* 체중 꺾은선 그래프: 실제 체중(실선) + 주차별 체크선(점선) */
+function hChart(p){
+  const all=Object.keys(S.health).filter(d=>parseFloat(S.health[d].weight)>0).sort().map(d=>[d,parseFloat(S.health[d].weight)]);
+  if(!all.length)return '<div class="empty m">체중을 입력하면 그래프가 나와요</div>';
+  const R_=S.chartRange||'plan',d0=ymd(mondayOf(pStart(p))),today=ymd();
+  const last=Math.max(...p.weeks.map(w=>w.n)),dEnd=dayDate(p,last,0);
+  let lo,hi;
+  if(R_=='plan'){lo=addDay(d0,-14);hi=dEnd}                      // 다이어트 시작 2주 전 ~ 6주차 끝
+  else if(R_=='3m'){lo=addDay(today,-90);hi=[today,dEnd].sort().pop()}
+  else if(R_=='6m'){lo=addDay(today,-182);hi=[today,dEnd].sort().pop()}
+  else{lo=all[0][0];hi=[all[all.length-1][0],dEnd].sort().pop()}
+  const pts=all.filter(x=>x[0]>=lo&&x[0]<=hi);
+  const span=Math.max(1,Math.round((dt(hi)-dt(lo))/864e5));
+  const chk=p.weeks.map(w=>[dayDate(p,w.n,0),w.line]).filter(x=>x[0]>=lo&&x[0]<=hi);
+  const ys=pts.map(x=>x[1]).concat(chk.map(x=>x[1]));
+  if(!ys.length)return `<div class="empty m">이 기간에는 기록이 없어요</div>${hRangeBtns()}`;
+  const ymin=Math.floor(Math.min(...ys)-1),ymax=Math.ceil(Math.max(...ys)+1);
+  const W=360,H=190,L=34,R=10,T=10,B=24;
+  const X=d=>L+(Math.round((dt(d)-dt(lo))/864e5)/span)*(W-L-R), Y=v=>T+(ymax-v)/(ymax-ymin)*(H-T-B);
+  const step=(ymax-ymin)>12?4:2, grid=[];for(let v=Math.ceil(ymin/step)*step;v<=ymax;v+=step)grid.push(v);
+  const line=a=>a.map(x=>X(x[0]).toFixed(1)+','+Y(x[1]).toFixed(1)).join(' ');
+  let xl;
+  if(R_=='plan')xl=p.weeks.map(w=>[dayDate(p,w.n,1),w.n+'주']);
+  else{xl=[];const e=dt(lo);e.setDate(1);for(e.setMonth(e.getMonth()+1);ymd(e)<=hi;e.setMonth(e.getMonth()+1))xl.push([ymd(e),(e.getMonth()+1)+'월'])}   // 월 눈금
+  xl=xl.filter(x=>x[0]>=lo&&x[0]<=hi);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:10px;font-size:10px" role="img" aria-label="체중 변화 그래프">
+    ${grid.map(v=>`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--ln)"/><text x="${L-4}" y="${Y(v)+3}" text-anchor="end" fill="var(--mu)">${v}</text>`).join('')}
+    ${xl.map(x=>`<text x="${X(x[0])}" y="${H-8}" text-anchor="start" fill="var(--mu)">${x[1]}</text>`).join('')}
+    <polyline points="${line(chk)}" fill="none" stroke="var(--mu)" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <polyline points="${line(pts)}" fill="none" stroke="var(--ac)" stroke-width="2.5" stroke-linejoin="round"/>
+    ${pts.map(x=>`<circle cx="${X(x[0])}" cy="${Y(x[1])}" r="${pts.length>60?1.8:3.5}" fill="var(--ac)"><title>${x[0]} · ${x[1]}kg</title></circle>`).join('')}
+  </svg>
+  <div class="m"><span style="color:var(--ac)">━</span> 내 체중 &nbsp; <span>┅</span> 주차별 체크선${pts.length?` · 최근 ${pts[pts.length-1][1]}kg${pts.length>1?` (이 기간 처음 대비 ${(pts[pts.length-1][1]-pts[0][1]>0?'+':'')+(pts[pts.length-1][1]-pts[0][1]).toFixed(1)}kg)`:''}`:''}</div>
+  ${hRangeBtns()}`;
+}
+function hRangeBtns(){
+  const cur=S.chartRange||'plan';
+  return `<div class="row" style="margin-top:6px">${[['plan','다이어트 기간'],['3m','3개월'],['6m','6개월'],['all','전체']].map(([k,n])=>`<button class="${cur==k?'p':''}" style="flex:1;padding:5px 2px;font-size:13px" onclick="S.chartRange='${k}';save();render()">${n}</button>`).join('')}</div>`;
+}
+function vHealth(){
+  const p=HP();
+  if(!p)return '<div class="card empty">다이어트 로드맵이 없어요. 로드맵 탭에서 diet.json을 불러오세요</div>';
+  const date=viewDate,h=S.health[date]||{},dow=dt(date).getDay(),n=weekNo(p,date),w=p.weeks.find(x=>x.n==n);
+  const c=hMenu(p,date),goal=p.goalSteps||10000,course=p.courses[Math.floor(dt(date)/864e5)%p.courses.length];
+  const av=hAvg(date,7),lab=['아침','점심','저녁'],key=['mb','ml','md'];
+  const meals=c?c.m.map((m,i)=>`<div class="item ${h[key[i]]?'done':''}"><input type="checkbox" ${h[key[i]]?'checked':''} onchange="hTick('${date}','${key[i]}')">
+      <div class="grow"><div class="t"><b>${lab[i]}</b> ${esc(m.t)}</div><div class="m">약 ${m.kcal}kcal · 단백질 ${m.p}g</div></div></div>`).join(''):'<div class="empty">조건에 맞는 메뉴 조합이 없어요</div>';
+  let hint='';
+  if(w&&av!=null){const diff=av-w.line;hint=diff>0.5?`체크선보다 ${diff.toFixed(1)}kg 높아요 → 보정: 걷기 2,000보 늘리기`:'체크선 이내예요. 이대로 유지해요'}
+  return `
+  <div class="card"><div class="row"><button class="i" onclick="shift(-1)">◀</button>
+    <div class="grow" style="text-align:center"><b>${date} (${DAYS[dow]})</b>${date==ymd()?' · 오늘':''}<div class="m">${w?`${p.name} · ${n}주차`:`${p.name} · ${n<1?'시작 전':'기간 종료'}`}</div></div>
+    <button class="i" onclick="shift(1)">▶</button></div></div>
+  <h2>🍽️ 오늘의 식단 ${c?`<span class="tag">약 ${c.k}kcal · 단백질 ${c.p}g</span>`:''}</h2>
+  <div class="card">${meals}
+    <div class="m" style="margin-top:6px">제로 탄산은 자유, 물은 별도로 2L (칼로리·단백질은 추정치)</div>
+    <div class="row" style="margin-top:8px"><label class="m"><input type="checkbox" ${h.water?'checked':''} onchange="hTick('${date}','water')"> 물 2L 마셨어요</label>
+    <span class="grow"></span><button class="i" onclick="hReroll('${date}')">🔀 다른 메뉴로</button></div></div>
+  <h2>💪 오늘의 운동</h2>
+  <div class="card"><b>맨몸 서킷 · 6종 연속 = 1세트 (세트 사이 1분 휴식, 총 3세트)</b>
+    ${p.circuit.map((e,i)=>`<div class="m">${i+1}. ${esc(e[0])} — ${esc(e[1])}</div>`).join('')}
+    <div class="row" style="margin-top:8px">${[1,2,3].map(i=>`<label><input type="checkbox" ${(h.sets||0)>=i?'checked':''} onchange="hSets('${date}',${i},this.checked)"> ${i}세트</label>`).join('')}</div></div>
+  <div class="card"><b>🚶 걷기 · 목표 ${goal.toLocaleString()}보 (약 7km)</b>
+    <div class="m" style="margin:4px 0">오늘 코스 · <b>${esc(course[0])}</b> (약 ${course[2]}km, 추정)<br>${esc(course[1])}</div>
+    <div class="row"><input type="number" inputmode="numeric" min="0" step="100" placeholder="오늘 걸음 수" value="${h.steps||''}" onchange="hSet('${date}','steps',this.value)" style="flex:1">
+    <span class="tag ${(+h.steps||0)>=goal?'':'late'}">${(+h.steps||0)>=goal?'달성':'목표까지 '+Math.max(0,goal-(+h.steps||0)).toLocaleString()}</span></div></div>
+  <h2>⚖️ 아침 공복 체중</h2>
+  <div class="card"><div class="row"><input type="number" inputmode="decimal" step="0.1" min="30" placeholder="kg" value="${h.weight||''}" onchange="hSet('${date}','weight',this.value)" style="flex:1">
+    <span class="m">${w?'이번 주 체크선 '+w.line+'kg':''}</span></div>
+    <div class="m" style="margin-top:6px">7일 평균 ${av==null?'-':av.toFixed(1)+'kg'} ${hint?'· '+hint:''}</div>
+    ${safe(()=>hChart(p))}</div>
+  <details class="card"><summary>📘 다이어트 수칙 · 보정 규칙</summary><div class="m" style="white-space:pre-line;margin-top:6px">${esc(p.guide)}</div></details>`;
+}
+function pTick(date,id){const l=S.log[date]=S.log[date]||{};l[id]=!l[id];save();render()}
+function pDel(id){if(confirm('이 로드맵을 삭제할까요? (체크 기록은 남아요)')){S.plans=S.plans.filter(x=>x.id!=id);save();render()}}
+async function pImport(files){
+  let n=0;
+  for(const f of files){try{const p=JSON.parse(await f.text());if(!p.id||!p.weeks)throw 0;
+    const i=S.plans.findIndex(x=>x.id==p.id);if(i<0)S.plans.push(p);else S.plans[i]=p;n++}catch(e){alert(f.name+': 올바른 로드맵 파일이 아니에요')}}
+  save();alert(n+'개 불러왔어요');render();
+}
+function vRoad(){
+  const proj=S.roadmap.map(p=>{
+    const n=p.items.filter(i=>i.done).length,pc=p.items.length?Math.round(n/p.items.length*100):0;
+    const phases=[...new Set(p.items.map(i=>i.phase))];
+    return `<details class="card" open><summary>${esc(p.name)} <span class="tag">${pc}%</span></summary>
+      <div class="bar" style="margin:8px 0"><i style="width:${pc}%"></i></div>
+      ${phases.map(ph=>`${ph?`<h3>${esc(ph)}</h3>`:''}${p.items.filter(i=>i.phase==ph).map(i=>`
+        <div class="item ${i.done?'done':''}"><input type="checkbox" ${i.done?'checked':''} onchange="rTick('${p.id}','${i.id}')"><div class="grow t">${esc(i.title)}</div></div>`).join('')}`).join('')}
+      <div class="row" style="margin-top:8px"><input type="text" id="ri_${p.id}" placeholder="항목 추가 (Enter)" onkeydown="if(event.key=='Enter')rAdd('${p.id}')">
+      <button class="i" onclick="rDel('${p.id}')">삭제</button></div></details>`;
+  }).join('');
+  return `${vPlans()}
+  <h2>직접 만든 체크리스트</h2>
+  ${proj}
+  <details class="card"><summary>체크리스트 붙여넣기 / 편집</summary>
+    <p class="m">마크다운 형식이에요. <code># 프로젝트</code> · <code>## 단계</code> · <code>- [ ] 항목</code> (완료는 <code>[x]</code>). 앞서 만든 로드맵·진도표를 이 형식으로 붙여넣으면 돼요.</p>
+    <textarea id="rt" placeholder="${esc(SAMPLE)}"></textarea>
+    <div class="row"><button class="p" onclick="rImport(false)">추가</button><button onclick="rImport(true)">전체 교체</button><button onclick="rExport()">현재 내용 보기</button></div></details>`;
+}
+function rTick(p,i){const it=S.roadmap.find(x=>x.id==p).items.find(x=>x.id==i);it.done=!it.done;save();render()}
+function rAdd(p){const v=$('#ri_'+p).value.trim();if(!v)return;const P=S.roadmap.find(x=>x.id==p);P.items.push({id:uid(),title:v,phase:P.items.length?P.items[P.items.length-1].phase:'',done:false});save();render()}
+function rDel(p){if(confirm('이 로드맵을 삭제할까요?')){S.roadmap=S.roadmap.filter(x=>x.id!=p);save();render()}}
+function rImport(replace){const r=parseRoad($('#rt').value);if(!r.length)return alert('읽을 항목이 없어요');S.roadmap=replace?r:S.roadmap.concat(r);save();render()}
+function rExport(){
+  $('#rt').value=S.roadmap.map(p=>{let ph=null,s='# '+p.name+'\n';p.items.forEach(i=>{if(i.phase!==ph&&i.phase){s+='## '+i.phase+'\n'}ph=i.phase;s+=`- [${i.done?'x':' '}] ${i.title}\n`});return s}).join('');
+}
+
+/* ---------- 구글 캘린더 ---------- */
+let tok=null,events=S.evCache||null;
+const gready=()=>window.google&&google.accounts&&google.accounts.oauth2;
+function loadGIS(){return new Promise((ok,no)=>{if(gready())return ok();const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.onload=ok;s.onerror=()=>no(new Error('Google 스크립트를 불러오지 못했어요'));document.head.appendChild(s)})}
+async function login(silent){
+  if(!S.clientId)throw new Error('먼저 Client ID를 저장해 주세요');
+  await loadGIS();
+  return new Promise((ok,no)=>{
+    if(silent)setTimeout(()=>no(new Error('timeout')),8000);   // 팝업이 막히면 포기하고 버튼으로 로그인
+    const c=google.accounts.oauth2.initTokenClient({client_id:S.clientId,scope:'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata',
+      callback:r=>{if(r.error)return no(new Error(r.error));tok=r.access_token;setTimeout(()=>tok=null,(r.expires_in-60)*1000);ok()},
+      error_callback:e=>no(new Error(e.type||'login'))});
+    c.requestAccessToken(silent?{prompt:''}:{});
+  });
+}
+
+/* ---------- 구글 드라이브 동기화 (이 앱 전용 숨김 폴더에 한 파일로 저장) ---------- */
+const SYNC_KEYS=['daily','log','main','sub','roadmap','health','plans','planCfg','chartRange'];
+const SYNC_NAME='quest-planner-data.json',DRV='https://www.googleapis.com/drive/v3/',UPL='https://www.googleapis.com/upload/drive/v3/files';
+let fileId=null,pushT=null,busy=false;
+function setSync(t){const b=$('#sync');if(b)b.textContent='☁️ '+t}
+function schedPush(){
+  if(!S.syncOn)return;
+  if(tok){clearTimeout(pushT);pushT=setTimeout(()=>syncNow(false),4000)}else setSync('저장 대기 (눌러서 동기화)');
+}
+async function drive(url,opt={}){
+  if(!tok)throw new Error('login');
+  const r=await fetch(url,{...opt,headers:{Authorization:'Bearer '+tok,...(opt.headers||{})}});
+  if(r.status==401){tok=null;throw new Error('login')}
+  if(!r.ok)throw new Error('Drive 오류 '+r.status);
+  return r;
+}
+async function dFind(){
+  const j=await(await drive(DRV+'files?spaces=appDataFolder&orderBy=createdTime&fields=files(id)&q='+encodeURIComponent(`name='${SYNC_NAME}'`))).json();
+  fileId=(j.files&&j.files[0]&&j.files[0].id)||null;return fileId;
+}
+async function dPull(){if(!fileId&&!await dFind())return null;return(await drive(DRV+'files/'+fileId+'?alt=media')).json()}
+async function dPush(pack){
+  const meta={name:SYNC_NAME};if(!fileId)meta.parents=['appDataFolder'];
+  const B='qpbound',body=`--${B}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${B}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(pack)}\r\n--${B}--`;
+  const r=await drive(fileId?`${UPL}/${fileId}?uploadType=multipart`:`${UPL}?uploadType=multipart`,{method:fileId?'PATCH':'POST',headers:{'Content-Type':'multipart/related; boundary='+B},body});
+  fileId=(await r.json()).id;
+}
+function mergeIn(rd){   // 두 기기가 모두 바뀐 경우: 합치기 (같은 항목은 이 기기 값이 우선)
+  for(const k of SYNC_KEYS){
+    const r=rd[k],l=S[k];if(r===undefined)continue;
+    if(l===undefined){S[k]=r;continue}
+    if(Array.isArray(l)&&Array.isArray(r)){const ids=new Set(l.map(x=>x&&x.id));S[k]=l.concat(r.filter(x=>x&&!ids.has(x.id)))}
+    else if(l&&r&&typeof l=='object'&&typeof r=='object'){
+      const o={...r};
+      for(const d in l)o[d]=(o[d]&&typeof o[d]=='object'&&typeof l[d]=='object'&&!Array.isArray(l[d]))?{...o[d],...l[d]}:l[d];
+      S[k]=o;
+    }
+  }
+}
+async function syncNow(interactive){
+  if(busy)return;busy=true;setSync('동기화 중…');
+  try{
+    if(!tok){if(!interactive){setSync('로그인 필요');return}await login(false)}
+    const rm=await dPull();
+    let up=!!S.dirty||!rm;
+    if(rm&&rm.savedAt>(S.syncedAt||0)){
+      if(S.dirty){mergeIn(rm.data);up=true}
+      else{for(const k of SYNC_KEYS)if(rm.data[k]!==undefined)S[k]=rm.data[k];S.syncedAt=rm.savedAt;up=false}
+    }
+    if(up){const t=Date.now();await dPush({savedAt:t,data:Object.fromEntries(SYNC_KEYS.map(k=>[k,S[k]]))});S.syncedAt=t;S.dirty=false}
+    S.syncOn=true;persist();render();
+    setSync('완료 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+  }catch(e){
+    console.error(e);
+    if(e.message=='login'||e.message=='popup_closed'||e.message=='access_denied'){setSync('로그인 필요');if(interactive&&e.message!='popup_closed')alert('로그인이 필요해요. ☁️ 버튼을 다시 눌러 주세요')}
+    else{setSync('오류 (다시 누르기)');if(interactive)alert('동기화 오류: '+e.message)}
+  }finally{busy=false}
+}
+function initSync(){
+  if(!S.syncOn){setSync('동기화');return}
+  setSync('연결 중…');
+  login(true).then(()=>syncNow(false)).catch(()=>setSync('로그인 필요 (눌러서 동기화)'));
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState=='visible'&&tok&&S.syncOn)syncNow(false)});
+}
+async function g(path,opt={}){
+  if(!tok)await login();
+  const r=await fetch('https://www.googleapis.com/calendar/v3/'+path,{...opt,headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'}});
+  if(!r.ok)throw new Error('Google 오류 '+r.status);
+  return r.json();
+}
+const addDay=(s,n)=>{const d=new Date(s+'T00:00');d.setDate(d.getDate()+n);return ymd(d)};
+async function calQuest(k,id){
+  const q=S[k].find(x=>x.id==id);
+  try{
+    const e=await g('calendars/primary/events',{method:'POST',body:JSON.stringify({summary:(k=='main'?'🔥 ':'📌 ')+q.title,description:q.memo||'',start:{date:q.due},end:{date:addDay(q.due,1)}})});
+    q.gid=e.id;save();alert('캘린더에 등록했어요');render();
+  }catch(e){alert(e.message)}
+}
+async function calDaily(id){
+  const q=S.daily.find(x=>x.id==id);
+  let d=ymd();for(let i=0;i<7&&!q.days.includes(new Date(d+'T00:00').getDay());i++)d=addDay(d,1);
+  try{
+    await g('calendars/primary/events',{method:'POST',body:JSON.stringify({summary:'✅ '+q.title,description:q.memo||'',start:{date:d},end:{date:addDay(d,1)},recurrence:['RRULE:FREQ=WEEKLY;BYDAY='+q.days.map(x=>RR[x]).join(',')]})});
+    alert('반복 일정으로 등록했어요');
+  }catch(e){alert(e.message)}
+}
+async function loadEvents(){
+  try{
+    const a=mondayOf(ymd()),b=new Date();b.setMonth(b.getMonth()+1);  // 이번 주 월요일 ~ 1개월 뒤
+    const r=await g('calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=250&timeMin='+encodeURIComponent(a.toISOString())+'&timeMax='+encodeURIComponent(b.toISOString()));
+    events=(r.items||[]).filter(e=>e.start).map(e=>({summary:e.summary,start:e.start}));
+    S.evCache=events;S.evAt=Date.now();save();msg='';
+  }catch(e){msg=e.message}
+  render();
+}
+function vCal(){
+  const evs=events?(events.length?events.map(e=>evRow(e,true)).join(''):'<div class="empty">앞으로 1개월간 일정이 없어요</div>'):'';
+  return `
+  <div class="card"><b>구글 캘린더 연동</b>
+    <p class="m">Google Cloud Console에서 만든 OAuth <b>Client ID</b>(웹 애플리케이션)를 넣고, 승인된 JavaScript 원본에 이 앱의 주소를 등록해야 해요.</p>
+    <input type="text" id="cid" value="${esc(S.clientId)}" placeholder="xxxx.apps.googleusercontent.com">
+    <div class="row" style="margin-top:8px"><button onclick="S.clientId=$('#cid').value.trim();save();alert('저장했어요')">저장</button>
+    <button class="p" onclick="loadEvents()">연결 · 1개월 일정 불러오기</button></div>
+    ${msg?`<p class="m" style="color:#e03131">${esc(msg)}</p>`:''}</div>
+  ${events?`<div class="card"><b>다가오는 일정</b>${evs}</div>`:''}
+  <div class="card"><b>메인·서브 퀘스트 → 캘린더</b><p class="m">마감일이 있는 퀘스트의 📆 버튼으로 종일 일정에 등록돼요. 일일 퀘스트의 📆는 요일 반복 일정으로 등록돼요.</p></div>
+  <div class="card"><b>백업 · 기기 간 옮기기</b>
+    <p class="m">데이터는 이 기기 브라우저에 저장돼요. 아이폰↔컴퓨터는 파일로 옮겨요.</p>
+    <div class="row"><button onclick="bk()">내보내기</button><button onclick="$('#bf').click()">가져오기</button></div>
+    <input type="file" id="bf" accept=".json" hidden onchange="rs(this.files[0])"></div>`;
+}
+function bk(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='quest-planner-'+ymd()+'.json';a.click()}
+function rs(f){if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.daily)throw 0;if(confirm('현재 데이터를 덮어쓸까요?')){S=d;S.plans=S.plans||[];S.planCfg=S.planCfg||{};S.health=S.health||{};S.clientId=S.clientId||DEFAULT_CLIENT;save();render()}}catch(e){alert('올바른 백업 파일이 아니에요')}})}
+
+render();initSync();
+</script>
+</body>
+</html>
