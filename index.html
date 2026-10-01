@@ -66,11 +66,12 @@ h3{font-size:14px;margin:12px 0 2px;color:var(--mu)}
 .wlab{position:absolute;right:3px;font-size:9px;color:var(--mu);transform:translateY(-50%)}
 .wke{position:absolute;overflow:hidden;border-radius:4px;color:#fff;padding:1px 3px;font-size:10px;line-height:1.2;border:1px solid var(--card);cursor:pointer}
 .wnow{position:absolute;left:0;right:0;border-top:2px solid #ea4335;z-index:2}
+.wnow::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:#ea4335}
 details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v16</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v17</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -211,18 +212,19 @@ function weekEvents(){
   });
   let lo=8,hi=20;const all=timed.flat();
   if(all.length){lo=Math.min(8,Math.floor(Math.min(...all.map(c=>c.sm))/60));hi=Math.min(24,Math.max(20,Math.ceil(Math.max(...all.map(c=>c.em))/60)))}
+  const nowM=(new Date()-dt(today))/6e4;
   const HH=34,hrs=[];for(let h=lo;h<hi;h++)hrs.push(h);
   const idx=x=>{weekList.push(x);return weekList.length-1};
   const head=`<div class="wkg"><div></div>${days.map(d=>`<div class="wd ${ymd(d)==today?'t':''}">${DAYS[d.getDay()]}<b>${d.getDate()}</b></div>`).join('')}</div>`;
   const hasAll=allday.some(l=>l.length);
   const adRow=hasAll?`<div class="wkg" style="margin-bottom:2px"><div class="m" style="font-size:9px;text-align:right;padding-right:3px">종일</div>${allday.map(l=>`<div style="min-width:0">${l.map(x=>`<div class="wad" style="background:${evColor(x.ev)}" title="${esc(x.ev.summary||'')}" onclick="evInfo(${idx(x)})">${esc(x.ev.summary||'(제목 없음)')}</div>`).join('')}</div>`).join('')}</div>`:'';
-  const nowM=(new Date()-dt(today))/6e4;
+  const showNow=weekOff==0&&nowM/60>=lo&&nowM/60<hi;
   const cols=days.map((d,i)=>{
     const L=wkLayout(timed[i]);
-    return `<div class="wcol" style="height:${hrs.length*HH}px">${L.map(c=>`<div class="wke" style="top:${(c.sm/60-lo)*HH}px;height:${Math.max(14,(c.em-c.sm)/60*HH-1)}px;left:${c.col/c.n*100}%;width:${100/c.n}%;background:${evColor(c.x.ev)}" title="${esc(c.x.ev.summary||'')}" onclick="evInfo(${idx(c.x)})">${esc(c.x.ev.summary||'(제목 없음)')}</div>`).join('')}${ymd(d)==today&&nowM/60>=lo&&nowM/60<hi?`<div class="wnow" style="top:${(nowM/60-lo)*HH}px"></div>`:''}</div>`}).join('');
+    return `<div class="wcol" style="height:${hrs.length*HH}px">${L.map(c=>`<div class="wke" style="top:${(c.sm/60-lo)*HH}px;height:${Math.max(14,(c.em-c.sm)/60*HH-1)}px;left:${c.col/c.n*100}%;width:${100/c.n}%;background:${evColor(c.x.ev)}" title="${esc(c.x.ev.summary||'')}" onclick="evInfo(${idx(c.x)})">${esc(c.x.ev.summary||'(제목 없음)')}</div>`).join('')}${ymd(d)==today&&showNow?`<div class="wnow" id="wnow" style="top:${(nowM/60-lo)*HH}px"></div>`:''}</div>`}).join('');
   const labels=`<div style="position:relative;height:${hrs.length*HH}px">${hrs.map((h,i)=>`<div class="wlab" style="top:${i*HH}px">${i?h:''}</div>`).join('')}</div>`;
   const lines=hrs.map((h,i)=>`<div class="whr" style="top:${i*HH}px"></div>`).join('');
-  const body=`<div class="wbody" id="wbody"><div style="position:absolute;left:28px;right:0;top:0;height:${hrs.length*HH}px">${lines}</div>
+  const body=`<div class="wbody" id="wbody" data-lo="${lo}" data-hh="${HH}" ${showNow?`data-now="${(nowM/60-lo)*HH}"`:''}><div style="position:absolute;left:28px;right:0;top:0;height:${hrs.length*HH}px">${lines}</div>
     <div class="wkg" style="position:relative">${labels}${cols}</div></div>`;
   return `<h2>🗓️ 주간 일정</h2><div class="card" style="padding:10px 8px">${nav}${head}${adRow}${body}
     ${S.evAt?`<div class="m" style="margin-top:6px;padding:0 6px">${new Date(S.evAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} 기준 <button class="i" onclick="loadEvents()">새로고침</button></div>`:''}</div>`;
