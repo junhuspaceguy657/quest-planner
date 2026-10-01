@@ -50,11 +50,23 @@ h2{font-size:16px;margin:16px 4px 4px}
 h3{font-size:14px;margin:12px 0 2px;color:var(--mu)}
 .empty{color:var(--mu);text-align:center;padding:18px 0}
 .ev{padding:8px 0;border-bottom:1px solid var(--ln)}
+/* 주간 캘린더 (구글 캘린더 주 보기 느낌) */
+.wkg{display:grid;grid-template-columns:28px repeat(7,minmax(0,1fr))}
+.wd{text-align:center;padding:2px 0;color:var(--mu);font-size:11px}
+.wd b{display:block;font-size:14px;font-weight:500;color:var(--tx);width:24px;height:24px;line-height:24px;margin:1px auto 0;border-radius:50%}
+.wd.t{color:var(--ac)}.wd.t b{background:var(--ac);color:#fff}
+.wad{border-radius:3px;color:#fff;padding:0 3px;margin:1px;font-size:10px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wbody{max-height:430px;overflow-y:auto;border-top:1px solid var(--ln);position:relative}
+.wcol{position:relative;border-left:1px solid var(--ln)}
+.whr{position:absolute;left:0;right:0;border-top:1px solid var(--ln)}
+.wlab{position:absolute;right:3px;font-size:9px;color:var(--mu);transform:translateY(-50%)}
+.wke{position:absolute;overflow:hidden;border-radius:4px;color:#fff;padding:1px 3px;font-size:10px;line-height:1.2;border:1px solid var(--card);cursor:pointer}
+.wnow{position:absolute;left:0;right:0;border-top:2px solid #ea4335;z-index:2}
 details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v11</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v12</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -158,13 +170,58 @@ function evRow(e,withDate){
   const d=evDate(e);
   return `<div class="ev"><div class="m">${withDate?md(d)+' ('+DAYS[dt(d).getDay()]+') · ':''}${t}</div>${esc(e.summary||'(제목 없음)')}</div>`;
 }
+/* 주간 캘린더: 요일 머리줄 + 종일 줄 + 시간표(겹치면 나란히). 구글 캘린더 이벤트 색(colorId)을 따라가요 */
+let weekOff=0,weekList=[];
+const GCOL={1:'#7986cb',2:'#33b679',3:'#8e24aa',4:'#e67c73',5:'#f6bf26',6:'#f4511e',7:'#039be5',8:'#616161',9:'#3f51b5',10:'#0b8043',11:'#d50000'};
+const evColor=e=>GCOL[e.colorId]||'#4285f4';
+function evSpan(e){
+  if(e.start.date){const s=dt(e.start.date),en=e.end&&e.end.date?dt(e.end.date):new Date(s.getTime()+864e5);return{all:1,s,e:en}}
+  const s=new Date(e.start.dateTime),en=e.end&&e.end.dateTime?new Date(e.end.dateTime):new Date(s.getTime()+36e5);return{all:0,s,e:en};
+}
+function wkLayout(list){   // 시간이 겹치는 일정은 가로로 나눠 배치
+  list.sort((a,b)=>a.sm-b.sm||b.em-a.em);
+  const out=[];let cl=[],end=-1;
+  const flush=()=>{const cols=[];cl.forEach(c=>{let k=cols.findIndex(x=>x<=c.sm);if(k<0){k=cols.length;cols.push(0)}cols[k]=c.em;c.col=k});cl.forEach(c=>c.n=cols.length);out.push(...cl);cl=[]};
+  list.forEach(c=>{if(cl.length&&c.sm>=end){flush();end=-1}cl.push(c);end=Math.max(end,c.em)});
+  if(cl.length)flush();return out;
+}
+function weekGo(n){weekOff=n==0?0:Math.max(0,weekOff+n);render()}
+function evInfo(i){const x=weekList[i];if(!x)return;const t=x.all?'종일':x.s.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})+' – '+x.e.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});alert((x.ev.summary||'(제목 없음)')+'\n'+md(ymd(x.s))+' '+t)}
 function weekEvents(){
-  const mon=mondayOf(ymd()),a=ymd(mon);mon.setDate(mon.getDate()+6);const b=ymd(mon);
-  let body;
-  if(!events)body=`<div class="empty">아직 불러오지 않았어요 <button onclick="loadEvents()">일정 불러오기</button></div>`;
-  else{const L=events.filter(e=>evDate(e)>=a&&evDate(e)<=b);
-    body=L.length?L.map(e=>evRow(e,true)).join(''):'<div class="empty">이번 주 일정이 없어요</div>'}
-  return `<h2>🗓️ 이번 주 일정 <span class="tag">${md(a)}–${md(b)}</span></h2><div class="card">${body}${events&&S.evAt?`<div class="m" style="margin-top:6px">${new Date(S.evAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} 기준 <button class="i" onclick="loadEvents()">새로고침</button></div>`:''}</div>`;
+  const mon=mondayOf(ymd());mon.setDate(mon.getDate()+7*weekOff);
+  const days=[...Array(7)].map((_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d});
+  const today=ymd(),a=ymd(days[0]),b=ymd(days[6]);
+  const nav=`<div class="row" style="margin-bottom:6px"><button class="i" onclick="weekGo(-1)" ${weekOff?'':'disabled'}>◀</button>
+    <div class="grow" style="text-align:center"><b>${md(a)} – ${md(b)}</b>${weekOff==0?' · 이번 주':''}</div>
+    <button class="i" onclick="weekGo(1)">▶</button>${weekOff?'<button class="i" onclick="weekGo(0)">이번 주</button>':''}</div>`;
+  if(!events)return `<h2>🗓️ 주간 일정</h2><div class="card">${nav}<div class="empty">아직 불러오지 않았어요 <button onclick="loadEvents()">일정 불러오기</button></div></div>`;
+  const evs=events.map(ev=>({ev,...evSpan(ev)}));
+  weekList=[];const allday=days.map(()=>[]),timed=days.map(()=>[]);
+  days.forEach((d,i)=>{
+    const de=new Date(d);de.setDate(de.getDate()+1);
+    evs.forEach(x=>{
+      if(!(x.s<de&&x.e>d))return;
+      if(x.all){allday[i].push(x)}
+      else{const s=x.s<d?d:x.s,en=x.e>de?de:x.e;timed[i].push({x,sm:(s-d)/6e4,em:Math.max((en-d)/6e4,(s-d)/6e4+25)})}
+    });
+  });
+  let lo=8,hi=20;const all=timed.flat();
+  if(all.length){lo=Math.min(8,Math.floor(Math.min(...all.map(c=>c.sm))/60));hi=Math.min(24,Math.max(20,Math.ceil(Math.max(...all.map(c=>c.em))/60)))}
+  const HH=34,hrs=[];for(let h=lo;h<hi;h++)hrs.push(h);
+  const idx=x=>{weekList.push(x);return weekList.length-1};
+  const head=`<div class="wkg"><div></div>${days.map(d=>`<div class="wd ${ymd(d)==today?'t':''}">${DAYS[d.getDay()]}<b>${d.getDate()}</b></div>`).join('')}</div>`;
+  const hasAll=allday.some(l=>l.length);
+  const adRow=hasAll?`<div class="wkg" style="margin-bottom:2px"><div class="m" style="font-size:9px;text-align:right;padding-right:3px">종일</div>${allday.map(l=>`<div style="min-width:0">${l.map(x=>`<div class="wad" style="background:${evColor(x.ev)}" title="${esc(x.ev.summary||'')}" onclick="evInfo(${idx(x)})">${esc(x.ev.summary||'(제목 없음)')}</div>`).join('')}</div>`).join('')}</div>`:'';
+  const nowM=(new Date()-dt(today))/6e4;
+  const cols=days.map((d,i)=>{
+    const L=wkLayout(timed[i]);
+    return `<div class="wcol" style="height:${hrs.length*HH}px">${L.map(c=>`<div class="wke" style="top:${(c.sm/60-lo)*HH}px;height:${Math.max(14,(c.em-c.sm)/60*HH-1)}px;left:${c.col/c.n*100}%;width:${100/c.n}%;background:${evColor(c.x.ev)}" title="${esc(c.x.ev.summary||'')}" onclick="evInfo(${idx(c.x)})">${esc(c.x.ev.summary||'(제목 없음)')}</div>`).join('')}${ymd(d)==today&&nowM/60>=lo&&nowM/60<hi?`<div class="wnow" style="top:${(nowM/60-lo)*HH}px"></div>`:''}</div>`}).join('');
+  const labels=`<div style="position:relative;height:${hrs.length*HH}px">${hrs.map((h,i)=>`<div class="wlab" style="top:${i*HH}px">${i?h:''}</div>`).join('')}</div>`;
+  const lines=hrs.map((h,i)=>`<div class="whr" style="top:${i*HH}px"></div>`).join('');
+  const body=`<div class="wbody" id="wbody"><div style="position:absolute;left:28px;right:0;top:0;height:${hrs.length*HH}px">${lines}</div>
+    <div class="wkg" style="position:relative">${labels}${cols}</div></div>`;
+  return `<h2>🗓️ 주간 일정</h2><div class="card" style="padding:10px 8px">${nav}${head}${adRow}${body}
+    ${S.evAt?`<div class="m" style="margin-top:6px;padding:0 6px">${new Date(S.evAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} 기준 <button class="i" onclick="loadEvents()">새로고침</button></div>`:''}</div>`;
 }
 function shift(n){const d=new Date(viewDate+'T00:00');d.setDate(d.getDate()+n);viewDate=ymd(d);render()}
 function tick(id){const l=S.log[viewDate]=S.log[viewDate]||{};l[id]=!l[id];save();render()}
@@ -535,7 +592,7 @@ async function loadEvents(){
   try{
     const a=mondayOf(ymd()),b=new Date();b.setMonth(b.getMonth()+1);  // 이번 주 월요일 ~ 1개월 뒤
     const r=await g('calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=250&timeMin='+encodeURIComponent(a.toISOString())+'&timeMax='+encodeURIComponent(b.toISOString()));
-    events=(r.items||[]).filter(e=>e.start).map(e=>({summary:e.summary,start:e.start}));
+    events=(r.items||[]).filter(e=>e.start).map(e=>({summary:e.summary,start:e.start,end:e.end,colorId:e.colorId}));
     S.evCache=events;S.evAt=Date.now();save();msg='';
   }catch(e){msg=e.message}
   render();
