@@ -71,7 +71,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v17</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v20</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -124,6 +124,7 @@ function render(){
   $('#date').textContent=new Date().toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'});
   $('#nav').innerHTML=TABS.map(([k,i,n])=>`<button class="${k==tab?'on':''}" onclick="go('${k}')"><b>${i}</b>${n}</button>`).join('');
   $('#app').innerHTML=({today:vToday,quest:vQuests,health:()=>safe(vHealth),road:vRoad,cal:vCal})[tab]();
+  if(tab=='health'&&mapOpen)drawMap();
 }
 const go=k=>{tab=k;msg='';render();scrollTo(0,0)};
 
@@ -384,6 +385,40 @@ function hReroll(date){
   for(let i=0;i<20;i++){h.re=(h.re||0)+1;if(sig()!=was)break}   // 눌렀는데 같은 메뉴가 나오지 않게
   save();render();
 }
+/* 걷기 코스 지도: 경로 좌표는 로드맵 데이터(구글 드라이브 = 내 계정)에만 있고 공개 웹 파일에는 없어요 */
+let mapOpen=false,mapSel=[];
+const MCOL=['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#008080','#9a6324','#800000','#808000','#000075','#f032e6','#469990','#b8860b','#2e8b57','#808080'];
+const todayCourse=p=>Math.floor(dt(viewDate)/864e5)%p.courses.length;
+function mapToggle(){mapOpen=!mapOpen;if(mapOpen){const p=HP();mapSel=[todayCourse(p)]}render()}
+function mapTog(i){const k=mapSel.indexOf(i);if(k<0)mapSel.push(i);else mapSel.splice(k,1);render()}
+function mapCard(p){
+  const has=p.courses.some(c=>c[3]&&c[3].length);
+  if(!has)return '<div class="card empty m">이 기기에는 코스 경로 데이터가 없어요. ☁️ 동기화를 하거나 로드맵 탭에서 diet.json을 불러오세요</div>';
+  return `<div class="card" style="margin-top:6px"><div class="m" style="margin-bottom:6px">번호를 눌러 코스를 켜고 꺼요 (● 출발 초록 · 도착 빨강)</div>
+    <div class="row" style="flex-wrap:wrap;gap:4px">${p.courses.map((c,i)=>`<button style="padding:3px 9px;font-size:13px;${mapSel.includes(i)?`background:${MCOL[i%MCOL.length]};color:#fff;border-color:${MCOL[i%MCOL.length]}`:''}" title="${esc(c[0])}" onclick="mapTog(${i})">${i+1}</button>`).join('')}</div>
+    <div class="m" style="margin:6px 0">${mapSel.length?mapSel.slice().sort((a,b)=>a-b).map(i=>`${i+1}. ${esc(p.courses[i][0])} · ${p.courses[i][2]}km`).join('<br>'):'켜진 코스가 없어요'}</div>
+    <div id="cmap" style="height:300px;border-radius:10px;overflow:hidden;background:var(--bg)"><div class="empty m">지도를 불러오는 중…</div></div></div>`;
+}
+function loadLeaflet(){return new Promise((ok,no)=>{
+  if(window.L)return ok();
+  const c=document.createElement('link');c.rel='stylesheet';c.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';document.head.appendChild(c);
+  const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';s.onload=ok;s.onerror=()=>no(new Error('지도 라이브러리를 불러오지 못했어요 (인터넷 연결 확인)'));document.head.appendChild(s);
+})}
+async function drawMap(){
+  const el=document.getElementById('cmap');if(!el)return;
+  try{await loadLeaflet()}catch(e){el.textContent=e.message;return}
+  const p=HP();if(!p||!document.body.contains(el))return;
+  el.innerHTML='';
+  const m=L.map(el);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(m);
+  const b=[];
+  mapSel.forEach(i=>{const c=p.courses[i];if(!c||!c[3]||!c[3].length)return;
+    L.polyline(c[3],{color:MCOL[i%MCOL.length],weight:5,opacity:.85}).addTo(m).bindTooltip((i+1)+'. '+c[0]);
+    L.circleMarker(c[3][0],{radius:6,color:'#fff',weight:2,fillColor:'#2f9e44',fillOpacity:1}).addTo(m).bindTooltip('출발');
+    L.circleMarker(c[3][c[3].length-1],{radius:6,color:'#fff',weight:2,fillColor:'#e03131',fillOpacity:1}).addTo(m).bindTooltip('도착');
+    b.push(...c[3]);});
+  if(b.length)m.fitBounds(b,{padding:[20,20]});else m.setView([37.49,127.03],14);
+}
 /* 체중 꺾은선 그래프: 실제 체중(실선) + 주차별 체크선(점선) */
 function hChart(p){
   const all=Object.keys(S.health).filter(d=>parseFloat(S.health[d].weight)>0).sort().map(d=>[d,parseFloat(S.health[d].weight)]);
@@ -446,8 +481,9 @@ function vHealth(){
   <div class="card"><b>맨몸 서킷 · 6종 연속 = 1세트 (세트 사이 1분 휴식, 총 3세트)</b>
     ${p.circuit.map((e,i)=>`<div class="m">${i+1}. ${esc(e[0])} — ${esc(e[1])}</div>`).join('')}
     <div class="row" style="margin-top:8px">${[1,2,3].map(i=>`<label><input type="checkbox" ${(h.sets||0)>=i?'checked':''} onchange="hSets('${date}',${i},this.checked)"> ${i}세트</label>`).join('')}</div></div>
-  <div class="card"><b>🚶 걷기 · 목표 ${goal.toLocaleString()}보 (약 7km)</b>
-    <div class="m" style="margin:4px 0">오늘 코스 · <b>${esc(course[0])}</b> (약 ${course[2]}km, 추정)<br>${esc(course[1])}</div>
+  <div class="card"><b>🚶 걷기 · 최소 ${goal.toLocaleString()}보 (약 ${(goal*0.0007).toFixed(1)}km)</b>
+    <div class="m" style="margin:4px 0">오늘 코스 · <b>${esc(course[0])}</b> (약 ${course[2]}km)<br>${esc(course[1])}<br><button class="i" onclick="mapToggle()" style="margin-top:4px">🗺️ 코스 지도 ${mapOpen?'닫기':'보기'}</button></div>
+    ${mapOpen?mapCard(p):''}
     <div class="row"><input type="number" inputmode="numeric" min="0" step="100" placeholder="오늘 걸음 수" value="${h.steps||''}" onchange="hSet('${date}','steps',this.value)" style="flex:1">
     <span class="tag ${(+h.steps||0)>=goal?'':'late'}">${(+h.steps||0)>=goal?'달성':'목표까지 '+Math.max(0,goal-(+h.steps||0)).toLocaleString()}</span></div></div>
   <h2>⚖️ 아침 공복 체중</h2>
