@@ -71,7 +71,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v20</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v22</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -90,7 +90,7 @@ S=S||{daily:[],log:{},main:[],sub:[],roadmap:[],clientId:''};
 S.plans=S.plans||[];S.planCfg=S.planCfg||{};S.health=S.health||{};S.clientId=S.clientId||DEFAULT_CLIENT;
 const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 const save=()=>{S.dirty=true;persist();schedPush()};   // 바뀔 때마다 저장 + (로그인돼 있으면) 드라이브로 자동 동기화
-/*B*/const BUNDLED=[];/*E*/
+/*B*/const BUNDLED=[{"id":"english","name":"실용 영어 (Grammar & Reading)","startDate":"2026-10-05","source":"실용영어_14주_로드맵.pdf","shifts":["2026-10-05"],"guide":"■ 하루 시간 (예상)\n영어 약 1시간 반 + Voca 최대 40분. 시간을 줄이려고 문법 7번(예문 TTS 듣기)과 독해 6번(의미 단위 낭독)은 뺐어요.\n\n■ 주간 틀\n월·화: 문법 1 Unit (월은 학원 있는 날, 독해 없음)\n수·목·금: 문법 1 Unit + 독해 1지문 (금 저녁에 이번 주 오답만 따로 모으기)\n토: 휴식 (원하면 음원 듣기만 20분) / 일: 복습\n\n■ 문법 (1 Unit)\n1) 교재 읽고 핵심 형광펜 → 2) 노션에 핵심 3줄 요약(10분 안팎) → 3) 교재·워크북 풀이 → 4) 오답은 틀린 이유 한 줄 → 5) 내 상황 예문 1~2개 영작 → 6) 내 예문 1~2번 낭독\n\n■ 독해 (1지문)\n1) 단어 찾지 않고 시간 재며 풀이 → 2) 막힌 문장 구조 분석·정답 확인 → 3) 숙어·관용구(덩어리 표현) 3개 형광펜 후 노션에 추가 → 4) 지문을 영어 한 문장으로 요약 → 5) 대본 없이 음원 1번 듣기 → 대본 보며 따라 읽기(쉐도잉)\n\n■ 일요일 복습\n이번 주 오답·예문 재읽기 → 지문 한 문단 받아쓰기 10분 후 원문과 대조 → 틀린 부분은 이유 기록 → 4주마다 예문 전체 훑기\n\n■ 하루 마무리 점검\n노션 정리 완료? · 오늘 문법으로 내 예문 작성? · 낭독 완료? · 오답 이유 기록?\n\n■ 듣기\n독해 지문: 대본 없이 1번 듣고 → 대본 보며 쉐도잉 (음원이 없으면 TTS) · 일요일 받아쓰기 10분 · 처음엔 대본 보고, 2회 차부터는 대본 없이","weeks":[{"n":1,"title":"문법 U.05~U.09","days":{"1":[{"t":"문법 Grammar Zone U.05"}],"2":[{"t":"문법 Grammar Zone U.06"}],"3":[{"t":"문법 Grammar Zone U.07"},{"t":"독해 Reading Tutor 2-1"}],"4":[{"t":"문법 Grammar Zone U.08"},{"t":"독해 Reading Tutor 2-2"}],"5":[{"t":"문법 Grammar Zone U.09"},{"t":"독해 Reading Tutor 2-3"}],"0":[{"t":"주간 복습","n":"적응기: 루틴 익히기"}]}},{"n":2,"title":"문법 U.10~U.14","days":{"1":[{"t":"문법 Grammar Zone U.10"}],"2":[{"t":"문법 Grammar Zone U.11"}],"3":[{"t":"문법 Grammar Zone U.12"},{"t":"독해 Reading Tutor 2-4"}],"4":[{"t":"문법 Grammar Zone U.13"},{"t":"독해 Reading Tutor 3-1"}],"5":[{"t":"문법 Grammar Zone U.14"},{"t":"독해 Reading Tutor 3-2"}],"0":[{"t":"주간 복습"}]}},{"n":3,"title":"문법 U.15~U.19","days":{"1":[{"t":"문법 Grammar Zone U.15"}],"2":[{"t":"문법 Grammar Zone U.16"}],"3":[{"t":"문법 Grammar Zone U.17"},{"t":"독해 Reading Tutor 3-3"}],"4":[{"t":"문법 Grammar Zone U.18"},{"t":"독해 Reading Tutor 3-4"}],"5":[{"t":"문법 Grammar Zone U.19"},{"t":"독해 Reading Tutor 4-1"}],"0":[{"t":"주간 복습"}]}},{"n":4,"title":"문법 U.20~U.24","days":{"1":[{"t":"문법 Grammar Zone U.20"}],"2":[{"t":"문법 Grammar Zone U.21"}],"3":[{"t":"문법 Grammar Zone U.22"},{"t":"독해 Reading Tutor 4-2"}],"4":[{"t":"문법 Grammar Zone U.23"},{"t":"독해 Reading Tutor 4-3"}],"5":[{"t":"문법 Grammar Zone U.24"},{"t":"독해 Reading Tutor 4-4"}],"0":[{"t":"주간 복습","n":"예문 전체 훑기 (1~4주)"}]}},{"n":5,"title":"문법 U.25~U.29","days":{"1":[{"t":"문법 Grammar Zone U.25"}],"2":[{"t":"문법 Grammar Zone U.26"}],"3":[{"t":"문법 Grammar Zone U.27"},{"t":"독해 Reading Tutor 5-1"}],"4":[{"t":"문법 Grammar Zone U.28"},{"t":"독해 Reading Tutor 5-2"}],"5":[{"t":"문법 Grammar Zone U.29"},{"t":"독해 Reading Tutor 5-3"}],"0":[{"t":"주간 복습"}]}},{"n":6,"title":"문법 U.30~U.34","days":{"1":[{"t":"문법 Grammar Zone U.30"}],"2":[{"t":"문법 Grammar Zone U.31"}],"3":[{"t":"문법 Grammar Zone U.32"},{"t":"독해 Reading Tutor 5-4"}],"4":[{"t":"문법 Grammar Zone U.33"},{"t":"독해 Reading Tutor 6-1"}],"5":[{"t":"문법 Grammar Zone U.34"},{"t":"독해 Reading Tutor 6-2"}],"0":[{"t":"주간 복습"}]}},{"n":7,"title":"문법 U.35~U.39","days":{"1":[{"t":"문법 Grammar Zone U.35"}],"2":[{"t":"문법 Grammar Zone U.36"}],"3":[{"t":"문법 Grammar Zone U.37"},{"t":"독해 Reading Tutor 6-3"}],"4":[{"t":"문법 Grammar Zone U.38"},{"t":"독해 Reading Tutor 6-4"}],"5":[{"t":"문법 Grammar Zone U.39"},{"t":"독해 Reading Tutor 7-1"}],"0":[{"t":"주간 복습"}]}},{"n":8,"title":"문법 U.40~U.44","days":{"1":[{"t":"문법 Grammar Zone U.40"}],"2":[{"t":"문법 Grammar Zone U.41"}],"3":[{"t":"문법 Grammar Zone U.42"},{"t":"독해 Reading Tutor 7-2"}],"4":[{"t":"문법 Grammar Zone U.43"},{"t":"독해 Reading Tutor 7-3"}],"5":[{"t":"문법 Grammar Zone U.44"},{"t":"독해 Reading Tutor 7-4"}],"0":[{"t":"주간 복습","n":"예문 전체 훑기 (5~8주)"}]}},{"n":9,"title":"문법 U.45~U.49","days":{"1":[{"t":"문법 Grammar Zone U.45"}],"2":[{"t":"문법 Grammar Zone U.46"}],"3":[{"t":"문법 Grammar Zone U.47"},{"t":"독해 Reading Tutor 8-1"}],"4":[{"t":"문법 Grammar Zone U.48"},{"t":"독해 Reading Tutor 8-2"}],"5":[{"t":"문법 Grammar Zone U.49"},{"t":"독해 Reading Tutor 8-3"}],"0":[{"t":"주간 복습"}]}},{"n":10,"title":"문법 U.50~U.54","days":{"1":[{"t":"문법 Grammar Zone U.50"}],"2":[{"t":"문법 Grammar Zone U.51"}],"3":[{"t":"문법 Grammar Zone U.52"},{"t":"독해 Reading Tutor 8-4"}],"4":[{"t":"문법 Grammar Zone U.53"},{"t":"독해 Reading Tutor 9-1"}],"5":[{"t":"문법 Grammar Zone U.54"},{"t":"독해 Reading Tutor 9-2"}],"0":[{"t":"주간 복습"}]}},{"n":11,"title":"문법 U.55~U.59","days":{"1":[{"t":"문법 Grammar Zone U.55"}],"2":[{"t":"문법 Grammar Zone U.56"}],"3":[{"t":"문법 Grammar Zone U.57"},{"t":"독해 Reading Tutor 9-3"}],"4":[{"t":"문법 Grammar Zone U.58"},{"t":"독해 Reading Tutor 9-4"}],"5":[{"t":"문법 Grammar Zone U.59"},{"t":"독해 Reading Tutor 10-1"}],"0":[{"t":"주간 복습"}]}},{"n":12,"title":"문법 U.60~U.64","days":{"1":[{"t":"문법 Grammar Zone U.60"}],"2":[{"t":"문법 Grammar Zone U.61"}],"3":[{"t":"문법 Grammar Zone U.62"},{"t":"독해 Reading Tutor 10-2"}],"4":[{"t":"문법 Grammar Zone U.63"},{"t":"독해 Reading Tutor 10-3"}],"5":[{"t":"문법 Grammar Zone U.64"},{"t":"독해 Reading Tutor 10-4"}],"0":[{"t":"주간 복습","n":"독해 36지문 완료"}]}},{"n":13,"title":"문법 U.65~U.69","days":{"1":[{"t":"문법 Grammar Zone U.65"}],"2":[{"t":"문법 Grammar Zone U.66"}],"3":[{"t":"문법 Grammar Zone U.67"},{"t":"독해 복습 (지문 재낭독·재듣기)"}],"4":[{"t":"문법 Grammar Zone U.68"},{"t":"독해 복습 (지문 재낭독·재듣기)"}],"5":[{"t":"문법 Grammar Zone U.69"},{"t":"독해 복습 (지문 재낭독·재듣기)"}],"0":[{"t":"주간 복습","n":"독해 지문 재낭독·재듣기"}]}},{"n":14,"title":"문법 U.70~U.74","days":{"1":[{"t":"문법 Grammar Zone U.70"}],"2":[{"t":"문법 Grammar Zone U.71"}],"3":[{"t":"문법 Grammar Zone U.72"},{"t":"독해 복습 (지문 재낭독·재듣기)"}],"4":[{"t":"문법 Grammar Zone U.73"},{"t":"독해 복습 (지문 재낭독·재듣기)"}],"5":[{"t":"문법 Grammar Zone U.74"},{"t":"독해 복습 (지문 재낭독·재듣기)"}],"0":[{"t":"주간 복습","n":"전체 점검 테스트, 이후 계획 수립"}]}}]}];/*E*/
 BUNDLED.forEach(p=>{const i=S.plans.findIndex(x=>x.id==p.id);if(i<0)S.plans.push(p);else S.plans[i]=p});persist();  // 내장 로드맵은 항상 최신본으로 (시작일 설정은 유지)
 /*W*/const BUNDLED_W={};/*WE*/
 if(S.wSeed!='v1'){   // 과거 체중(SmartDiet CSV + 스크린샷)을 한 번만 채워 넣음. 이미 적어 둔 날짜는 건드리지 않아요
@@ -107,14 +107,32 @@ const pStart=p=>cfg(p).start||p.startDate;
 const pOn=p=>cfg(p).on!==false;
 const weekNo=(p,date)=>Math.round((mondayOf(date)-mondayOf(pStart(p)))/6048e5)+1;  // 시작일이 속한 주 = 1주차
 const dayDate=(p,n,dow)=>{const d=mondayOf(pStart(p));d.setDate(d.getDate()+7*(n-1)+(dow==0?6:dow-1));return ymd(d)};
+/* 진도 미루기: 미룬 날(평일)부터 그 뒤 평일 진도가 하루씩 밀려요. 토·일 내용(휴무·주간 복습/점검)은 제자리예요 */
+const pShifts=p=>[...new Set([...(p.shifts||[]),...(cfg(p).shifts||[])])].sort();
+const nextWd=s=>{const d=dt(s);do d.setDate(d.getDate()+1);while(d.getDay()==0||d.getDay()==6);return ymd(d)};
+function slotDate(p,n,dow){   // 원래 일정 칸(n주차 dow요일)이 실제로 놓이는 날짜
+  let D=dayDate(p,n,dow);if(dow==0||dow==6)return D;
+  for(const s of pShifts(p))if(s<=D)D=nextWd(D);
+  return D;
+}
 function planTasks(date){
-  const dow=dt(date).getDay(),out=[];
+  const out=[];
   S.plans.filter(p=>pOn(p)&&!p.kind).forEach(p=>{   // 건강(kind) 로드맵은 오늘의 학습이 아니라 건강 탭에서
-    const n=weekNo(p,date),w=p.weeks.find(x=>x.n==n);
-    if(w)(w.days[dow]||[]).forEach((t,i)=>out.push({id:p.id+'|'+n+'|'+dow+'|'+i,text:tTxt(t),note:tNote(t),plan:p,n,wt:w.title}));
+    p.weeks.forEach(w=>Object.keys(w.days).forEach(d=>{
+      if(slotDate(p,w.n,+d)!=date)return;
+      w.days[d].forEach((t,i)=>out.push({id:p.id+'|'+w.n+'|'+d+'|'+i,text:tTxt(t),note:tNote(t),plan:p,n:w.n,wt:w.title}));
+    }));
   });
   return out;
 }
+function pShiftToday(id){
+  const p=S.plans.find(x=>x.id==id),t=ymd(),wd=dt(t).getDay();
+  if(wd==0||wd==6)return alert('주말에는 미룰 진도가 없어요 (평일만 미뤄요)');
+  if(pShifts(p).includes(t))return alert('오늘은 이미 미뤘어요');
+  if(!confirm(p.name+'\n오늘 진도부터 하루씩 뒤로 미룰까요?'))return;
+  const c=cfg(p);c.shifts=(c.shifts||[]).concat(t);save();render();
+}
+function pUnshift(id){const c=cfg(S.plans.find(x=>x.id==id));if(c.shifts&&c.shifts.length){c.shifts.pop();save();render()}}
 const isDone=(date,id)=>!!(S.log[date]||{})[id];
 
 let tab='today', viewDate=ymd(), msg='';
@@ -330,7 +348,7 @@ function vPlans(){
   const today=ymd();
   return S.plans.map(p=>{
     let tot=0,dn=0;
-    p.weeks.forEach(w=>Object.keys(w.days).forEach(d=>w.days[d].forEach((t,i)=>{tot++;if(isDone(dayDate(p,w.n,+d),p.id+'|'+w.n+'|'+d+'|'+i))dn++})));
+    p.weeks.forEach(w=>Object.keys(w.days).forEach(d=>w.days[d].forEach((t,i)=>{tot++;if(isDone(slotDate(p,w.n,+d),p.id+'|'+w.n+'|'+d+'|'+i))dn++})));
     if(p.kind)p.weeks.forEach(w=>ORDER.forEach(d=>{tot++;if(hDayOk(p,dayDate(p,w.n,d)))dn++}));
     const cur=weekNo(p,today),last=Math.max(...p.weeks.map(w=>w.n)),pc=tot?Math.round(dn/tot*100):0;
     const state=cur<0||cur<p.weeks[0].n?`시작 전 (${pStart(p)})`:cur>last?'기간 종료':`지금 ${cur}주차 / ${last}주차`;
@@ -340,7 +358,7 @@ function vPlans(){
       if(p.kind){wt=7;ORDER.forEach(d=>{if(hDayOk(p,dayDate(p,w.n,d)))wd++});
         const av=hAvg(dayDate(p,w.n,0),7);
         return `<div class="row" style="margin-top:6px"><div class="grow">${w.n}주차 · ${esc(w.title)} <span class="tag">${md(a)}–${md(b)}</span>${w.n==cur?' <span class="tag late">이번 주</span>':''}</div><span class="tag">운동·걷기 ${wd}/7일</span><span class="tag">${av==null?'체중 -':'평균 '+av.toFixed(1)+'kg'}</span></div>`}
-      const body=ORDER.filter(d=>(w.days[d]||[]).length).map(d=>{const date=dayDate(p,w.n,d);
+      const body=ORDER.filter(d=>(w.days[d]||[]).length).map(d=>{const date=slotDate(p,w.n,d);
         return `<h3>${WD[d]} ${md(date)}${date==today?' · 오늘':''}</h3>`+w.days[d].map((t,i)=>{const id=p.id+'|'+w.n+'|'+d+'|'+i,ck=isDone(date,id);wt++;if(ck)wd++;
           return `<div class="item ${ck?'done':''}"><input type="checkbox" ${ck?'checked':''} onchange="pTick('${date}','${id}')"><div class="grow"><div class="t">${esc(tTxt(t))}</div>${tNote(t)?`<div class="m" style="white-space:pre-line">${esc(tNote(t))}</div>`:''}</div></div>`}).join('')}).join('');
       return `<details ${w.n==cur?'open':''} style="margin-top:6px"><summary>${w.n}주차 · ${esc(w.title)} <span class="tag">${md(a)}–${md(b)}</span> <span class="tag">${wd}/${wt}</span>${w.n==cur?' <span class="tag late">이번 주</span>':''}</summary>${body}</details>`}).join('');
@@ -348,6 +366,7 @@ function vPlans(){
       <div class="bar" style="margin:8px 0"><i style="width:${pc}%"></i></div>
       <div class="row"><label class="m">1주차 시작일</label><input type="date" value="${pStart(p)}" style="flex:1" onchange="cfg(S.plans.find(x=>x.id=='${p.id}')).start=this.value;save();render()">
       ${p.kind?'<span class="m">🥗 건강 탭에 표시돼요</span>':`<label class="m"><input type="checkbox" ${pOn(p)?'checked':''} onchange="cfg(S.plans.find(x=>x.id=='${p.id}')).on=this.checked;save();render()"> 오늘 탭에 표시</label>`}</div>
+      ${p.kind?'':`<div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="i" onclick="pShiftToday('${p.id}')">⏭ 오늘 진도 하루 미루기</button>${(cfg(p).shifts||[]).length?`<button class="i" onclick="pUnshift('${p.id}')">마지막 미루기 취소</button>`:''}${pShifts(p).length?`<span class="m">미룬 날: ${pShifts(p).map(md).join(', ')}</span>`:''}</div>`}
       ${p.guide?`<details style="margin-top:8px"><summary>📘 학습 방법</summary><div class="m" style="white-space:pre-line;margin-top:6px">${esc(p.guide)}</div></details>`:''}
       ${weeks}
       <div class="row" style="margin-top:8px"><button class="i" onclick="pDel('${p.id}')">이 로드맵 삭제</button></div></div>`;
@@ -417,7 +436,7 @@ async function drawMap(){
     L.circleMarker(c[3][0],{radius:6,color:'#fff',weight:2,fillColor:'#2f9e44',fillOpacity:1}).addTo(m).bindTooltip('출발');
     L.circleMarker(c[3][c[3].length-1],{radius:6,color:'#fff',weight:2,fillColor:'#e03131',fillOpacity:1}).addTo(m).bindTooltip('도착');
     b.push(...c[3]);});
-  if(b.length)m.fitBounds(b,{padding:[20,20]});else m.setView([37.49,127.03],14);
+  if(b.length)m.fitBounds(b,{padding:[20,20]});else m.setView([37.5665,126.978],12);
 }
 /* 체중 꺾은선 그래프: 실제 체중(실선) + 주차별 체크선(점선) */
 function hChart(p){
