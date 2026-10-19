@@ -71,7 +71,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v25</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v26</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -211,7 +211,6 @@ function render(){
   $('#date').textContent=new Date().toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'});
   $('#nav').innerHTML=TABS.map(([k,i,n])=>`<button class="${k==tab?'on':''}" onclick="go('${k}')"><b>${i}</b>${n}</button>`).join('');
   $('#app').innerHTML=({today:vToday,quest:vQuests,health:()=>safe(vHealth),road:vRoad,cal:vCal})[tab]();
-  if(tab=='health'&&mapOpen)drawMap();
 }
 const go=k=>{tab=k;msg='';render();scrollTo(0,0)};
 
@@ -462,7 +461,13 @@ function hPick(p,date,avoid){
   const r=hRng(hHash(date+'|'+((S.health[date]||{}).re||0)+'|'+p.id));
   return all[Math.floor(r()*all.length)];
 }
-const hMenu=(p,date)=>hPick(p,date,hPick(p,addDay(date,-1),null));
+function hMenu(p,date){
+  if(!p.menus)return hPick(p,date,hPick(p,addDay(date,-1),null));
+  // 식단 30종: 다이어트 시작일부터 하루씩 순서대로 돌아가요. 🔀 는 컵누들 여부가 같은 다른 식단으로 바꿔요 (컵누들 주 3회 이내 유지)
+  const M=p.menus,n=M.length,base=((Math.round((dt(date)-dt(pStart(p)))/864e5)%n)+n)%n,re=(S.health[date]||{}).re||0;
+  let i=base;if(re){const alt=M.map((x,j)=>j).filter(j=>j!=base&&M[j].cup==M[base].cup);if(alt.length)i=alt[(re-1)%alt.length]}
+  const x=M[i];return {m:x.m.map((m,k)=>({...m,id:i+'-'+k})),k:x.kcal,p:x.p,no:i+1};
+}
 const hd=date=>S.health[date]||(S.health[date]={});
 function hAvg(date,n){const v=[];for(let i=0;i<n;i++){const w=parseFloat((S.health[addDay(date,-i)]||{}).weight);if(w>0)v.push(w)}return v.length?v.reduce((a,b)=>a+b)/v.length:null}
 const hDayOk=(p,date)=>{const h=S.health[date];return !!h&&(h.sets||0)>=3&&(+h.steps||0)>=(p.goalSteps||10000)};
@@ -473,40 +478,6 @@ function hReroll(date){
   const p=HP(),h=hd(date),sig=()=>{const c=hMenu(p,date);return c?c.m.map(m=>m.id).join():''},was=sig();
   for(let i=0;i<20;i++){h.re=(h.re||0)+1;if(sig()!=was)break}   // 눌렀는데 같은 메뉴가 나오지 않게
   save();render();
-}
-/* 걷기 코스 지도: 경로 좌표는 로드맵 데이터(구글 드라이브 = 내 계정)에만 있고 공개 웹 파일에는 없어요 */
-let mapOpen=false,mapSel=[];
-const MCOL=['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#008080','#9a6324','#800000','#808000','#000075','#f032e6','#469990','#b8860b','#2e8b57','#808080'];
-const todayCourse=p=>Math.floor(dt(viewDate)/864e5)%p.courses.length;
-function mapToggle(){mapOpen=!mapOpen;if(mapOpen){const p=HP();mapSel=[todayCourse(p)]}render()}
-function mapTog(i){const k=mapSel.indexOf(i);if(k<0)mapSel.push(i);else mapSel.splice(k,1);render()}
-function mapCard(p){
-  const has=p.courses.some(c=>c[3]&&c[3].length);
-  if(!has)return '<div class="card empty m">이 기기에는 코스 경로 데이터가 없어요. ☁️ 동기화를 하거나 로드맵 탭에서 diet.json을 불러오세요</div>';
-  return `<div class="card" style="margin-top:6px"><div class="m" style="margin-bottom:6px">번호를 눌러 코스를 켜고 꺼요 (● 출발 초록 · 도착 빨강)</div>
-    <div class="row" style="flex-wrap:wrap;gap:4px">${p.courses.map((c,i)=>`<button style="padding:3px 9px;font-size:13px;${mapSel.includes(i)?`background:${MCOL[i%MCOL.length]};color:#fff;border-color:${MCOL[i%MCOL.length]}`:''}" title="${esc(c[0])}" onclick="mapTog(${i})">${i+1}</button>`).join('')}</div>
-    <div class="m" style="margin:6px 0">${mapSel.length?mapSel.slice().sort((a,b)=>a-b).map(i=>`${i+1}. ${esc(p.courses[i][0])} · ${p.courses[i][2]}km`).join('<br>'):'켜진 코스가 없어요'}</div>
-    <div id="cmap" style="height:300px;border-radius:10px;overflow:hidden;background:var(--bg)"><div class="empty m">지도를 불러오는 중…</div></div></div>`;
-}
-function loadLeaflet(){return new Promise((ok,no)=>{
-  if(window.L)return ok();
-  const c=document.createElement('link');c.rel='stylesheet';c.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';document.head.appendChild(c);
-  const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';s.onload=ok;s.onerror=()=>no(new Error('지도 라이브러리를 불러오지 못했어요 (인터넷 연결 확인)'));document.head.appendChild(s);
-})}
-async function drawMap(){
-  const el=document.getElementById('cmap');if(!el)return;
-  try{await loadLeaflet()}catch(e){el.textContent=e.message;return}
-  const p=HP();if(!p||!document.body.contains(el))return;
-  el.innerHTML='';
-  const m=L.map(el);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(m);
-  const b=[];
-  mapSel.forEach(i=>{const c=p.courses[i];if(!c||!c[3]||!c[3].length)return;
-    L.polyline(c[3],{color:MCOL[i%MCOL.length],weight:5,opacity:.85}).addTo(m).bindTooltip((i+1)+'. '+c[0]);
-    L.circleMarker(c[3][0],{radius:6,color:'#fff',weight:2,fillColor:'#2f9e44',fillOpacity:1}).addTo(m).bindTooltip('출발');
-    L.circleMarker(c[3][c[3].length-1],{radius:6,color:'#fff',weight:2,fillColor:'#e03131',fillOpacity:1}).addTo(m).bindTooltip('도착');
-    b.push(...c[3]);});
-  if(b.length)m.fitBounds(b,{padding:[20,20]});else m.setView([37.5665,126.978],12);
 }
 /* 체중 꺾은선 그래프: 실제 체중(실선) + 주차별 체크선(점선) */
 function hChart(p){
@@ -521,7 +492,7 @@ function hChart(p){
   else{lo=all[0][0];hi=[all[all.length-1][0],dEnd].sort().pop()}
   const pts=all.filter(x=>x[0]>=lo&&x[0]<=hi);
   const span=Math.max(1,Math.round((dt(hi)-dt(lo))/864e5));
-  const chk=p.weeks.map(w=>[dayDate(p,w.n,0),w.line]).filter(x=>x[0]>=lo&&x[0]<=hi);
+  const chk=p.weeks.map(w=>[w.date||dayDate(p,w.n,0),w.line]).filter(x=>x[0]>=lo&&x[0]<=hi);
   const ys=pts.map(x=>x[1]).concat(chk.map(x=>x[1]));
   if(!ys.length)return `<div class="empty m">이 기간에는 기록이 없어요</div>${hRangeBtns()}`;
   const ymin=Math.floor(Math.min(...ys)-1),ymax=Math.ceil(Math.max(...ys)+1);
@@ -551,17 +522,17 @@ function vHealth(){
   const p=HP();
   if(!p)return '<div class="card empty">다이어트 로드맵이 없어요. 로드맵 탭에서 diet.json을 불러오세요</div>';
   const date=viewDate,h=S.health[date]||{},dow=dt(date).getDay(),n=weekNo(p,date),w=p.weeks.find(x=>x.n==n);
-  const c=hMenu(p,date),goal=p.goalSteps||10000,course=p.courses[Math.floor(dt(date)/864e5)%p.courses.length];
-  const av=hAvg(date,7),lab=['아침','점심','저녁'],key=['mb','ml','md'];
+  const c=hMenu(p,date),goal=p.goalSteps||10000;
+  const av=hAvg(date,7),lab=['아침','점심','저녁','간식'],key=['mb','ml','md','mn'];
   const meals=c?c.m.map((m,i)=>`<div class="item ${h[key[i]]?'done':''}"><input type="checkbox" ${h[key[i]]?'checked':''} onchange="hTick('${date}','${key[i]}')">
       <div class="grow"><div class="t"><b>${lab[i]}</b> ${esc(m.t)}</div><div class="m">약 ${m.kcal}kcal · 단백질 ${m.p}g</div></div></div>`).join(''):'<div class="empty">조건에 맞는 메뉴 조합이 없어요</div>';
   let hint='';
-  if(w&&av!=null){const diff=av-w.line;hint=diff>0.5?`체크선보다 ${diff.toFixed(1)}kg 높아요 → 보정: 걷기 2,000보 늘리기`:'체크선 이내예요. 이대로 유지해요'}
+  if(w&&av!=null){const diff=av-w.line;hint=diff>0.5?`체크선보다 ${diff.toFixed(1)}kg 높아요 → Diet방에 알려 조정해요`:'체크선 이내예요. 이대로 유지해요'}
   return `
   <div class="card"><div class="row"><button class="i" onclick="shift(-1)">◀</button>
     <div class="grow" style="text-align:center"><b>${date} (${DAYS[dow]})</b>${date==ymd()?' · 오늘':''}<div class="m">${w?`${p.name} · ${n}주차`:`${p.name} · ${n<1?'시작 전':'기간 종료'}`}</div></div>
     <button class="i" onclick="shift(1)">▶</button></div></div>
-  <h2>🍽️ 오늘의 식단 ${c?`<span class="tag">약 ${c.k}kcal · 단백질 ${c.p}g</span>`:''}</h2>
+  <h2>🍽️ 오늘의 식단 ${c&&c.no?`<span class="tag">${c.no}번</span> `:''}${c?`<span class="tag">약 ${c.k}kcal · 단백질 ${c.p}g</span>`:''}</h2>
   <div class="card">${meals}
     <div class="m" style="margin-top:6px">제로 탄산은 자유, 물은 별도로 2L (칼로리·단백질은 추정치)</div>
     <div class="row" style="margin-top:8px"><label class="m"><input type="checkbox" ${h.water?'checked':''} onchange="hTick('${date}','water')"> 물 2L 마셨어요</label>
@@ -570,9 +541,7 @@ function vHealth(){
   <div class="card"><b>맨몸 서킷 · 6종 연속 = 1세트 (세트 사이 1분 휴식, 총 3세트)</b>
     ${p.circuit.map((e,i)=>`<div class="m">${i+1}. ${esc(e[0])} — ${esc(e[1])}</div>`).join('')}
     <div class="row" style="margin-top:8px">${[1,2,3].map(i=>`<label><input type="checkbox" ${(h.sets||0)>=i?'checked':''} onchange="hSets('${date}',${i},this.checked)"> ${i}세트</label>`).join('')}</div></div>
-  <div class="card"><b>🚶 걷기 · 최소 ${goal.toLocaleString()}보 (약 ${(goal*0.0007).toFixed(1)}km)</b>
-    <div class="m" style="margin:4px 0">오늘 코스 · <b>${esc(course[0])}</b> (약 ${course[2]}km)<br>${esc(course[1])}<br><button class="i" onclick="mapToggle()" style="margin-top:4px">🗺️ 코스 지도 ${mapOpen?'닫기':'보기'}</button></div>
-    ${mapOpen?mapCard(p):''}
+  <div class="card"><b>🚶 걷기 · 집→사무실 약 ${goal.toLocaleString()}보</b>
     <div class="row"><input type="number" inputmode="numeric" min="0" step="100" placeholder="오늘 걸음 수" value="${h.steps||''}" onchange="hSet('${date}','steps',this.value)" style="flex:1">
     <span class="tag ${(+h.steps||0)>=goal?'':'late'}">${(+h.steps||0)>=goal?'달성':'목표까지 '+Math.max(0,goal-(+h.steps||0)).toLocaleString()}</span></div></div>
   <h2>⚖️ 아침 공복 체중</h2>
