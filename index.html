@@ -73,7 +73,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v27</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v28</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -121,16 +121,35 @@ function slotDate(p,n,dow){   // 원래 일정 칸(n주차 dow요일)이 실제�
   for(const s of pShifts(p))if(s<=D)D=nextWd(D);
   return D;
 }
+/* 로드맵 칸을 실제 날짜에 놓은 목록. 평일 칸에는 회차 번호(원래 순서대로 1, 2, 3…)를 붙여요 */
+function planSlots(p){
+  const out=[],sk=cfg(p).skips||[];let ses=0;
+  p.weeks.forEach(w=>[1,2,3,4,5,6,0].forEach(d=>{
+    const L=w.days[d];if(!L||!L.length)return;
+    const wk=d>=1&&d<=5;if(wk)ses++;
+    const date=slotDate(p,w.n,d);if(sk.includes(date))return;   // 건너뛴 날: 그날 할 일은 미루지 않고 버려요
+    L.forEach((t,i)=>out.push({id:p.id+'|'+w.n+'|'+d+'|'+i,t,n:w.n,d,date,ses:wk?ses:0,wt:w.title}));
+  }));
+  return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+}
 function planTasks(date){
   const out=[];
   S.plans.filter(p=>pOn(p)&&!p.kind).forEach(p=>{   // 건강(kind) 로드맵은 오늘의 학습이 아니라 건강 탭에서
-    if((cfg(p).skips||[]).includes(date))return;   // 건너뛴 날: 그날 할 일은 미루지 않고 버려요
-    p.weeks.forEach(w=>Object.keys(w.days).forEach(d=>{
-      if(slotDate(p,w.n,+d)!=date)return;
-      w.days[d].forEach((t,i)=>out.push({id:p.id+'|'+w.n+'|'+d+'|'+i,text:tTxt(t),note:tNote(t),plan:p,n:w.n,wt:w.title}));
-    }));
+    planSlots(p).filter(x=>x.date==date).forEach(x=>out.push({id:x.id,text:tTxt(x.t),note:tNote(x.t),plan:p,n:x.n,ses:x.ses,wt:x.wt}));
   });
   return out;
+}
+/* 로드맵 탭: 실제 달력 주(월~일) 단위로 보여 줘요. 요일은 실제 날짜의 요일이에요 */
+function calWeeks(p,today){
+  const g={},thisMon=ymd(mondayOf(today));
+  planSlots(p).forEach(x=>{const k=ymd(mondayOf(x.date));(g[k]=g[k]||[]).push(x)});
+  return Object.keys(g).sort().map(k=>{
+    const L=g[k],wd=L.filter(x=>isDone(x.date,x.id)).length,byDate={};
+    L.forEach(x=>(byDate[x.date]=byDate[x.date]||[]).push(x));
+    const body=Object.keys(byDate).sort().map(d=>`<h3>${WD[dt(d).getDay()]} ${md(d)}${d==today?' · 오늘':''}</h3>`+byDate[d].map(x=>{const ck=isDone(d,x.id);
+      return `<div class="item ${ck?'done':''}"><input type="checkbox" ${ck?'checked':''} onchange="pTick('${d}','${x.id}')"><div class="grow"><div class="t">${esc(tTxt(x.t))}</div>${tNote(x.t)?`<div class="m" style="white-space:pre-line">${esc(tNote(x.t))}</div>`:''}<div class="m"><span class="tag">${x.ses?x.ses+'회차':'주말'}</span> ${x.n}주차 · ${esc(x.wt)}</div></div></div>`}).join('')).join('');
+    return `<details ${k==thisMon?'open':''} style="margin-top:6px"><summary>${md(k)}–${md(addDay(k,6))} <span class="tag">${wd}/${L.length}</span>${k==thisMon?' <span class="tag late">이번 주</span>':''}</summary>${body}</details>`;
+  }).join('');
 }
 function pShiftToday(id){
   const p=S.plans.find(x=>x.id==id),t=ymd(),wd=dt(t).getDay();
@@ -236,7 +255,7 @@ function vToday(){
   ${safe(weekEvents)}
   ${pt.length?`<h2>📖 오늘의 학습 (주차별 자동)</h2><div class="card">${pt.map(t=>`
     <div class="item ${log[t.id]?'done':''}"><input type="checkbox" ${log[t.id]?'checked':''} onchange="tick('${t.id}')">
-    <div class="grow"><div class="t">${esc(t.text)}</div>${t.note?`<div class="m" style="white-space:pre-line;margin-top:2px">${esc(t.note)}</div>`:''}<div class="m"><span class="tag">${esc(t.plan.name)} · ${t.n}주차</span> ${esc(t.wt)}</div></div></div>`).join('')}</div>`:''}
+    <div class="grow"><div class="t">${esc(t.text)}</div>${t.note?`<div class="m" style="white-space:pre-line;margin-top:2px">${esc(t.note)}</div>`:''}<div class="m"><span class="tag">${esc(t.plan.name)} · ${t.ses?t.ses+'회차':t.n+'주차 주말'}</span> ${t.n}주차 · ${esc(t.wt)}</div></div></div>`).join('')}</div>`:''}
   <h2>✅ 내 일일 퀘스트</h2>
   <div class="card">${list.length?list.map(q=>`
     <div class="item ${log[q.id]?'done':''}"><input type="checkbox" ${log[q.id]?'checked':''} onchange="tick('${q.id}')">
@@ -435,20 +454,16 @@ function vPlans(){
   return S.plans.map(p=>{
     if(p.kind=='routine')return routineCard(p);
     let tot=0,dn=0;
-    p.weeks.forEach(w=>Object.keys(w.days).forEach(d=>w.days[d].forEach((t,i)=>{tot++;if(isDone(slotDate(p,w.n,+d),p.id+'|'+w.n+'|'+d+'|'+i))dn++})));
+    if(!p.kind){const L=planSlots(p);tot=L.length;dn=L.filter(x=>isDone(x.date,x.id)).length}
     if(p.kind)p.weeks.forEach(w=>ORDER.forEach(d=>{tot++;if(hDayOk(p,dayDate(p,w.n,d)))dn++}));
     const cur=weekNo(p,today),last=Math.max(...p.weeks.map(w=>w.n)),pc=tot?Math.round(dn/tot*100):0;
     const state=cur<0||cur<p.weeks[0].n?`시작 전 (${pStart(p)})`:cur>last?'기간 종료':`지금 ${cur}주차 / ${last}주차`;
-    const weeks=p.weeks.map(w=>{
-      const a=dayDate(p,w.n,1),b=dayDate(p,w.n,0);
-      let wt=0,wd=0;
-      if(p.kind){wt=7;ORDER.forEach(d=>{if(hDayOk(p,dayDate(p,w.n,d)))wd++});
-        const av=hAvg(dayDate(p,w.n,0),7);
-        return `<div class="row" style="margin-top:6px"><div class="grow">${w.n}주차 · ${esc(w.title)} <span class="tag">${md(a)}–${md(b)}</span>${w.n==cur?' <span class="tag late">이번 주</span>':''}</div><span class="tag">운동·걷기 ${wd}/7일</span><span class="tag">${av==null?'체중 -':'평균 '+av.toFixed(1)+'kg'}</span></div>`}
-      const body=ORDER.filter(d=>(w.days[d]||[]).length).map(d=>{const date=slotDate(p,w.n,d);
-        return `<h3>${WD[d]} ${md(date)}${date==today?' · 오늘':''}</h3>`+w.days[d].map((t,i)=>{const id=p.id+'|'+w.n+'|'+d+'|'+i,ck=isDone(date,id);wt++;if(ck)wd++;
-          return `<div class="item ${ck?'done':''}"><input type="checkbox" ${ck?'checked':''} onchange="pTick('${date}','${id}')"><div class="grow"><div class="t">${esc(tTxt(t))}</div>${tNote(t)?`<div class="m" style="white-space:pre-line">${esc(tNote(t))}</div>`:''}</div></div>`}).join('')}).join('');
-      return `<details ${w.n==cur?'open':''} style="margin-top:6px"><summary>${w.n}주차 · ${esc(w.title)} <span class="tag">${md(a)}–${md(b)}</span> <span class="tag">${wd}/${wt}</span>${w.n==cur?' <span class="tag late">이번 주</span>':''}</summary>${body}</details>`}).join('');
+    const weeks=p.kind?p.weeks.map(w=>{
+      const a=dayDate(p,w.n,1),b=dayDate(p,w.n,0);let wd=0;
+      ORDER.forEach(d=>{if(hDayOk(p,dayDate(p,w.n,d)))wd++});
+      const av=hAvg(dayDate(p,w.n,0),7);
+      return `<div class="row" style="margin-top:6px"><div class="grow">${w.n}주차 · ${esc(w.title)} <span class="tag">${md(a)}–${md(b)}</span>${w.n==cur?' <span class="tag late">이번 주</span>':''}</div><span class="tag">운동·걷기 ${wd}/7일</span><span class="tag">${av==null?'체중 -':'평균 '+av.toFixed(1)+'kg'}</span></div>`;
+    }).join(''):calWeeks(p,today);
     return `<div class="card"><div class="row"><div class="grow"><b>${esc(p.name)}</b><div class="m">${state}</div></div><span class="tag">${pc}%</span></div>
       <div class="bar" style="margin:8px 0"><i style="width:${pc}%"></i></div>
       <div class="row"><label class="m">1주차 시작일</label><input type="date" value="${pStart(p)}" style="flex:1" onchange="cfg(S.plans.find(x=>x.id=='${p.id}')).start=this.value;save();render()">
