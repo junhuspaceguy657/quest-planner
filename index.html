@@ -73,7 +73,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v31</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v32</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -289,7 +289,7 @@ function vToday(){
   ${safe(weekEvents)}
   ${pt.length?`<h2>📖 오늘의 학습 (주차별 자동)</h2><div class="card">${pt.map(t=>`
     <div class="item ${log[t.id]?'done':''}"><input type="checkbox" ${log[t.id]?'checked':''} onchange="tick('${t.id}')">
-    <div class="grow"><div class="t">${esc(t.text)}</div>${t.note?`<div class="m" style="white-space:pre-line;margin-top:2px">${esc(t.note)}</div>`:''}<div class="m"><span class="tag">${esc(t.plan.name)} · ${t.tag||(t.ses?t.ses+'회차':t.n+'주차 주말')}</span> ${t.n}주차 · ${esc(t.wt)}</div></div></div>`).join('')}</div>`:''}
+    <div class="grow"><div class="t">${esc(t.text)}</div>${t.note?`<div class="m" style="white-space:pre-line;margin-top:2px">${esc(t.note)}</div>`:''}${t.plan.id=='voca'&&t.id.endsWith('|0')?`<a class="i" href="voca.html#today" style="display:inline-block;margin:4px 0;padding:4px 10px;border:1px solid var(--ln);border-radius:8px;text-decoration:none;color:var(--ac)">🔤 트레이너 열기</a>`:''}<div class="m"><span class="tag">${esc(t.plan.name)} · ${t.tag||(t.ses?t.ses+'회차':t.n+'주차 주말')}</span> ${t.n}주차 · ${esc(t.wt)}</div></div></div>`).join('')}</div>`:''}
   <h2>✅ 내 일일 퀘스트</h2>
   <div class="card">${list.length?list.map(q=>`
     <div class="item ${log[q.id]?'done':''}"><input type="checkbox" ${log[q.id]?'checked':''} onchange="tick('${q.id}')">
@@ -823,6 +823,18 @@ function vCal(){
 function bk(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='quest-planner-'+ymd()+'.json';a.click()}
 function rs(f){if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.daily)throw 0;if(confirm('현재 데이터를 덮어쓸까요?')){S=d;S.plans=S.plans||[];S.planCfg=S.planCfg||{};S.health=S.health||{};S.clientId=S.clientId||DEFAULT_CLIENT;save();render()}}catch(e){alert('올바른 백업 파일이 아니에요')}})}
 
+/* Voca 트레이너(voca.html, 같은 주소)가 1바퀴를 마친 기록 → 그날 Voca 할 일 자동 체크 (Voca방 11-09 · 이 기기 안에서만) */
+function vocaSync(){
+  let md;try{md=JSON.parse(localStorage.getItem('vocatrainer_v1_mdone'))||{}}catch(e){return}
+  const V=S.plans.find(p=>p.id=='voca');if(!V)return;
+  const sl=planSlots(V);let ch=0;
+  for(const k in md){const r=md[k];if(!r||!r.planDate)continue;
+    sl.filter(x=>x.date==r.planDate&&x.n==r.w).forEach(x=>{const l=S.log[x.date]=S.log[x.date]||{};if(!l[x.id]){l[x.id]=true;ch=1}})}
+  if(ch)save();
+}
+safe(vocaSync);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState=='visible'){safe(vocaSync);render()}});
+window.addEventListener('pageshow',()=>{safe(vocaSync);render()});
 render();initSync();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});   // 홈 화면 앱으로 설치·오프라인 열기용
 </script>
