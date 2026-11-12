@@ -73,7 +73,7 @@ details summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v32</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
+<header><h1>⚔️ 퀘스트 플래너 <small style="font-size:11px;color:var(--mu)">v33</small></h1><div><button id="sync" class="i" onclick="syncNow(true)">☁️ 동기화</button> <span id="date"></span></div></header>
 <main id="app"></main>
 <nav id="nav"></nav>
 
@@ -221,6 +221,11 @@ if(S.adjV5!=='2026-11-09'){
 if(S.adjV6!=='2026-11-09'){
   const x=S.planCfg.voca=S.planCfg.voca||{};x.start='2026-11-16';x.shifts=[];x.skips=[];x.offset=0;
   S.adjV6='2026-11-09';S.dirty=true;persist();
+}
+/* 다이어트 새 계획 (Diet방 11-12): 단식 시작 11/10 — 1주차는 11/9 주 그대로 */
+if(S.adjV7!=='2026-11-12'){
+  const x=S.planCfg.diet=S.planCfg.diet||{};x.start='2026-11-10';x.shifts=[];
+  S.adjV7='2026-11-12';S.dirty=true;persist();
 }
 S.times=S.times||{};
 
@@ -601,11 +606,40 @@ function hRangeBtns(){
   const cur=S.chartRange||'plan';
   return `<div class="row" style="margin-top:6px">${[['plan','다이어트 기간'],['3m','3개월'],['6m','6개월'],['all','전체']].map(([k,n])=>`<button class="${cur==k?'p':''}" style="flex:1;padding:5px 2px;font-size:13px" onclick="S.chartRange='${k}';save();render()">${n}</button>`).join('')}</div>`;
 }
+/* 식단 단계 (Diet방 11-12): 단식기 · 다이어트기(골라담기 600) · 복귀 1·2기(+추가식·일반식) · 복귀 3·4기(자유) · 토·일 치팅 */
+const hStage=(p,date)=>(p.stages||[]).find(s=>date>=s.from&&date<=s.to);
+function hCart(date,id,d){const c=hd(date).cart=hd(date).cart||{};c[id]=Math.max(0,(c[id]||0)+d);save();render()}
+function hFood(p,date,h){
+  const st=hStage(p,date),F=p.food,dw=dt(date).getDay(),we=dw==0||dw==6;
+  const water=`<div class="row" style="margin-top:8px"><label class="m"><input type="checkbox" ${h.water?'checked':''} onchange="hTick('${date}','water')"> 물 충분히 마셨어요</label></div>
+    <div class="m" style="margin-top:6px">${esc(F.common)}</div>`;
+  if(!st)return `<h2>🍽️ 오늘의 식단</h2><div class="card m">식단 계획 기간이 아니에요 (${md(p.stages[0].from)}~${md(p.stages[p.stages.length-1].to)})</div>`;
+  let o=`<h2>🍽️ 오늘의 식단 <span class="tag">${esc(st.name)}</span> <span class="tag">${md(st.from)}–${md(st.to)}</span></h2>`;
+  if(st.key=='fast')return o+`<div class="card"><b>단식 — 0kcal</b><div class="m" style="margin-top:4px">허용: ${esc(F.fastAllow)}</div>
+    ${date==st.to?`<div class="item ${h.md?'done':''}"><input type="checkbox" ${h.md?'checked':''} onchange="hTick('${date}','md')"><div class="grow"><div class="t">${esc(F.fastBreak)}</div></div></div>`:''}
+    <div class="m" style="margin-top:6px">⚠️ ${esc(F.warn)}</div>${water}</div>`;
+  if(st.key=='free')return o+`<div class="card"><b>자유식</b><div class="m" style="margin-top:4px">${esc(F.keep)}</div>${water}</div>`;
+  if(we)return o+`<div class="card"><div class="item ${h.cheat?'done':''}"><input type="checkbox" ${h.cheat?'checked':''} onchange="hTick('${date}','cheat')">
+      <div class="grow"><div class="t"><b>치팅 1끼</b> 약 1,000kcal (추정)</div></div></div>
+    <details><summary class="m">예시 보기</summary><div class="m" style="white-space:pre-line;margin-top:4px">${esc(F.cheat)}</div></details>${water}</div>`;
+  const c=h.cart||{},T=F.target,k=F.cart.reduce((a,x)=>a+(c[x.id]||0)*x.kcal,0),pr=F.cart.reduce((a,x)=>a+(c[x.id]||0)*x.p,0);
+  o+=`<div class="card"><div class="row"><b class="grow">단백질 골라담기 ${T}</b><span class="tag ${k>T?'late':''}">${k} / ${T}kcal · 단백질 ${pr}g</span></div>
+    <div class="bar" style="margin:8px 0"><i style="width:${Math.min(100,k/T*100)}%"></i></div>
+    ${F.cart.map(x=>`<div class="row" style="margin-top:6px"><div class="grow">${esc(x.t)}<div class="m">${x.kcal}kcal · 단백질 ${x.p}g</div></div>
+      <button class="i" onclick="hCart('${date}','${x.id}',-1)">−</button><b style="min-width:24px;text-align:center">${c[x.id]||0}</b><button class="i" onclick="hCart('${date}','${x.id}',1)">+</button></div>`).join('')}
+    <div class="m" style="margin-top:6px">${k<T?`${T-k}kcal 더 담을 수 있어요`:k==T?'딱 맞아요':`${k-T}kcal 넘었어요`}</div>`;
+  if(st.key=='ret1'||st.key=='ret2'){const X=st.key=='ret1'?F.extra:F.normal;
+    o+=`<div class="item ${h.mx?'done':''}" style="margin-top:8px"><input type="checkbox" ${h.mx?'checked':''} onchange="hTick('${date}','mx')">
+      <div class="grow"><div class="t"><b>${esc(X.name)}</b> 약 ${X.kcal}kcal (추정)</div></div></div>
+      <details><summary class="m">${esc(X.name)} 메뉴 보기</summary>${X.items.map(i=>`<div class="m">· ${esc(i[0])} — ${esc(i[1])}kcal</div>`).join('')}
+      <div class="m" style="white-space:pre-line;margin-top:6px">${esc(F.shops)}</div></details>`}
+  return o+water+'</div>';
+}
 function vHealth(){
   const p=HP();
   if(!p)return '<div class="card empty">다이어트 로드맵이 없어요. 로드맵 탭에서 diet.json을 불러오세요</div>';
   const date=viewDate,h=S.health[date]||{},dow=dt(date).getDay(),n=weekNo(p,date),w=p.weeks.find(x=>x.n==n);
-  const c=hMenu(p,date),goal=p.goalSteps||10000,ph=hPhase(p,date);
+  const c=p.stages?null:hMenu(p,date),goal=p.goalSteps||10000,ph=hPhase(p,date);
   const av=hAvg(date,7),lab=['아침','점심','저녁','간식'],key=['mb','ml','md','mn'];
   const meals=c?c.m.map((m,i)=>`<div class="item ${h[key[i]]?'done':''}"><input type="checkbox" ${h[key[i]]?'checked':''} onchange="hTick('${date}','${key[i]}')">
       <div class="grow"><div class="t"><b>${lab[i]}</b> ${esc(m.t)}${m.why?` <span class="tag">${esc(m.why)}</span>`:''}</div><div class="m">약 ${m.kcal}kcal · 단백질 ${m.p}g</div></div></div>`).join(''):'<div class="empty">조건에 맞는 메뉴 조합이 없어요</div>';
@@ -615,6 +649,7 @@ function vHealth(){
   <div class="card"><div class="row"><button class="i" onclick="shift(-1)">◀</button>
     <div class="grow" style="text-align:center"><b>${date} (${DAYS[dow]})</b>${date==ymd()?' · 오늘':''}<div class="m">${w?`${p.name} · ${n}주차`:`${p.name} · ${n<1?'시작 전':'기간 종료'}`}</div></div>
     <button class="i" onclick="shift(1)">▶</button></div></div>
+  ${p.stages?safe(()=>hFood(p,date,h)):`
   <h2>🍽️ 오늘의 식단 ${c&&c.no?`<span class="tag">${c.no}번</span> `:''}${c?`<span class="tag">${p.dinner?'아침+점심 ':''}약 ${c.k}kcal · 단백질 ${c.p}g</span>`:''}</h2>
   <div class="card">${meals}
     <div class="m" style="margin-top:6px">${p.dinner?'물은 별도로 2L':'제로 탄산은 자유, 물은 별도로 2L'} (칼로리·단백질은 추정치)</div>
@@ -628,6 +663,7 @@ function vHealth(){
     ${h.dn?`<div class="row"><span class="grow"></span><button class="i" onclick="hSet('${date}','dn','')">선택 지우기</button></div>`:''}
     <label class="m" style="display:block;margin-top:6px"><input type="checkbox" ${h.over?'checked':''} onchange="hTick('${date}','over')"> 저녁이 700kcal를 넘었어요 → 내일 점심 자동 교체</label>
     <div class="m" style="margin-top:6px">군것질 없음 (과자·간식·야식 0) · 배고프면 제로 탄산·물, 그래도 힘들면 계란 1개</div></div>`:''}
+`}
   <h2>💪 오늘의 운동</h2>
   <div class="card"><b>맨몸 서킷 · 6종 연속 = 1세트 (세트 사이 ${ph.rest} 휴식, 총 ${ph.sets}세트)</b>${ph.name?` <span class="tag">${ph.name}</span>`:''}
     ${p.circuit.map((e,i)=>{const x=(ph.mods||{})[i]||e;return `<div class="m">${i+1}. ${esc(x[0])} — ${esc(x[1])}</div>`}).join('')}
